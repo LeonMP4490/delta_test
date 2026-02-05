@@ -9,7 +9,7 @@ from scipy.ndimage import gaussian_filter
 from scipy.interpolate import interp1d
 import requests
 from fpdf import FPDF
-import plotly.graph_objects as go
+import plotly.graph_objects as go  # Asegurate de tener plotly en requirements.txt
 
 # 1. CONFIGURACIÓN E ICONO
 URL_ICONO = "ICONO_2.png" 
@@ -26,6 +26,7 @@ st.markdown(f"""
     .main {{ background-color: #ffffff; }}
     .block-container {{ padding-top: 1rem; padding-bottom: 0rem; }}
     
+    /* Baja el icono y evita que se corte */
     [data-testid="stImage"] {{ 
         display: flex; 
         justify-content: center; 
@@ -123,70 +124,37 @@ with col_izq:
                 <small>Actualizado: {hora_estacion} hs</small>
                 </div>""", unsafe_allow_html=True)
 
-    # --- VELOCÍMETRO TÉCNICO (Aguja Central Pivote Semicircular) ---
-    fig = go.Figure()
+    # --- VELOCÍMETRO ESTÁNDAR (Aguja Gruesa) ---
+    fig_gauge = go.Figure(go.Indicator(
+        mode = "gauge+number",
+        value = ie_act,
+        domain = {'x': [0, 1], 'y': [0, 1]},
+        title = {'text': "Delta T (°C)", 'font': {'size': 16}},
+        gauge = {
+            'axis': {'range': [0, 15], 'tickwidth': 1, 'tickcolor': "black"},
+            'bar': {'color': "rgba(0,0,0,0)"},
+            'bgcolor': "white",
+            'borderwidth': 2,
+            'bordercolor': "gray",
+            'steps': [
+                {'range': [0, 2], 'color': "#F1F8E9"}, # Rocío
+                {'range': [2, 8], 'color': "#2E7D32"}, # Óptimo
+                {'range': [8, 9.5], 'color': "#FFF9C4"}, # Precaución
+                {'range': [9.5, 15], 'color': "#D32F2F"} # Alta evap
+            ],
+            # --- AGUJA ---
+            'threshold': {
+                'line': {'color': "black", 'width': 6}, # MÁS GRUESA
+                'thickness': 0.8,
+                'value': ie_act
+            }
+        }))
     
-    # 1. Fondo de colores (Semicírculo)
-    fig.add_trace(go.Pie(
-        values=[2, 6, 1.5, 5.5], # Rango total 15
-        marker=dict(colors=["#F1F8E9", "#2E7D32", "#FFF9C4", "#D32F2F"]),
-        hole=0.7, # Grosor del arco
-        direction="clockwise",
-        sort=False,
-        rotation=90, # Semicírculo inferior
-        showlegend=False,
-        hoverinfo="skip"
-    ))
-    
-    # 2. Ocultar mitad superior
-    fig.add_trace(go.Pie(
-        values=[15, 15], 
-        marker=dict(colors=["rgba(0,0,0,0)", "white"]), # Mitad invisible
-        hole=0.7,
-        direction="clockwise",
-        sort=False,
-        rotation=90,
-        showlegend=False,
-        hoverinfo="skip"
-    ))
+    # Ajuste de tamaño
+    fig_gauge.update_layout(height=250, margin=dict(l=20, r=20, t=30, b=10))
+    st.plotly_chart(fig_gauge, use_container_width=True)
 
-    # 3. Cálculo ángulo aguja (15 unidades = 180 grados)
-    angulo = 180 - (max(0, min(15, ie_act)) / 15 * 180)
-    
-    # 4. Aguja (Anotación)
-    fig.add_annotation(
-        ax=0, ay=0,
-        x=0.5 * np.cos(np.radians(angulo)),
-        y=0.5 * np.sin(np.radians(angulo)),
-        xref="paper", yref="paper",
-        showarrow=True,
-        arrowhead=2,
-        arrowsize=1,
-        arrowwidth=5,
-        arrowcolor="black"
-    )
-    
-    # 5. Punto central
-    fig.add_trace(go.Scatter(
-        x=[0], y=[0],
-        mode="markers",
-        marker=dict(size=25, color="#333"),
-        showlegend=False,
-        hoverinfo="skip"
-    ))
-
-    fig.update_layout(
-        height=250,
-        margin=dict(l=10, r=10, t=10, b=10),
-        xaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
-        yaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
-        plot_bgcolor='white',
-        paper_bgcolor='white'
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-
-    # --- BOTONES DE CONTROL ---
+    # --- BOTONES DE CONTROL DE APLICACIÓN ---
     st.markdown("---")
     if not st.session_state.aplicando:
         if st.button("🔴 Iniciar Aplicación", use_container_width=True):
@@ -243,7 +211,7 @@ with col_der:
 st.markdown("<p style='font-size: 12px; text-align: center; font-weight: bold;'>⬜ Rocío | 🟩 Óptimo | 🟨 Precaución | 🟥 Alta Evap | 🟪Viento Prohibido</p>", unsafe_allow_html=True)
 st.caption(f"Estación Cooperativa de Bouquet | {(datetime.now() - timedelta(hours=3)).strftime('%d/%m %H:%M')}")
 
-# --- 5. GENERACIÓN DE PDF ---
+# --- 5. GENERACIÓN DE PDF Y RESUMEN ---
 st.markdown("---")
 if not st.session_state.aplicando and st.session_state.inicio_app:
     st.success("✅ Aplicación finalizada. Generando reporte...")
@@ -253,18 +221,22 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
     if not df.empty:
         st.subheader("Resumen de Registros de la Aplicación")
         
-        # --- Formatear decimales ---
+        # --- Formatear decimales para visualización ---
         df_display = df.copy()
         df_display['DT'] = df_display['DT'].map('{:,.2f}'.format)
         df_display['Viento'] = df_display['Viento'].map('{:,.2f}'.format)
         
+        # --- Mostrar tabla ---
         st.dataframe(df_display, use_container_width=True)
         
-        # --- CÁLCULOS ---
-        min_dt, max_dt = df['DT'].min(), df['DT'].max()
-        mean_dt, mean_viento = df['DT'].mean(), df['Viento'].mean()
+        # --- CÁLCULOS DETALLADOS ---
+        min_dt = df['DT'].min()
+        max_dt = df['DT'].max()
+        mean_dt = df['DT'].mean()
+        mean_viento = df['Viento'].mean()
         dir_predominante = df['Direccion'].mode()[0] if not df['Direccion'].mode().empty else "N/A"
         
+        # Métricas
         col_res1, col_res2, col_res3 = st.columns(3)
         col_res1.metric("Delta T Promedio", f"{mean_dt:.1f} °C")
         col_res2.metric("Delta T Min/Max", f"{min_dt:.1f} / {max_dt:.1f} °C")
@@ -274,14 +246,21 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
         # --- Generar PDF ---
         pdf = FPDF()
         pdf.add_page()
+        pdf.set_font("Arial", size=12)
+        
+        # Título
         pdf.set_font("Arial", 'B', 16)
         pdf.cell(200, 10, txt="Informe de Aplicación - Monitor Leon", ln=1, align='C')
         pdf.ln(10)
+        
+        # Info general
         pdf.set_font("Arial", size=12)
         pdf.cell(200, 10, txt=f"Ingeniero: León - MP 4490", ln=1)
         pdf.cell(200, 10, txt=f"Inicio: {st.session_state.inicio_app.strftime('%d/%m/%Y %H:%M')}", ln=1)
         pdf.cell(200, 10, txt=f"Fin: {(datetime.now() - timedelta(hours=3)).strftime('%d/%m/%Y %H:%M')}", ln=1)
         pdf.ln(5)
+        
+        # Estadísticas Detalladas
         pdf.set_font("Arial", 'B', 12)
         pdf.cell(200, 10, txt="Resumen Estadístico:", ln=1)
         pdf.set_font("Arial", size=12)
@@ -289,11 +268,21 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
         pdf.cell(200, 10, txt=f"- Viento: Prom {mean_viento:.1f} km/h - Predom: {dir_predominante}", ln=1)
         pdf.ln(10)
         
+        # Tabla de datos en PDF
         pdf.set_font("Arial", 'B', 10)
-        pdf.cell(40, 10, "Hora", 1); pdf.cell(40, 10, "Delta T (°C)", 1); pdf.cell(40, 10, "Viento (km/h)", 1); pdf.cell(40, 10, "Direccion", 1); pdf.ln()
+        pdf.cell(40, 10, "Hora", 1)
+        pdf.cell(40, 10, "Delta T (°C)", 1)
+        pdf.cell(40, 10, "Viento (km/h)", 1)
+        pdf.cell(40, 10, "Direccion", 1)
+        pdf.ln()
+        
         pdf.set_font("Arial", size=10)
         for _, row in df.iterrows():
-            pdf.cell(40, 10, row['Hora'], 1); pdf.cell(40, 10, str(row['DT']), 1); pdf.cell(40, 10, str(row['Viento']), 1); pdf.cell(40, 10, row['Direccion'], 1); pdf.ln()
+            pdf.cell(40, 10, row['Hora'], 1)
+            pdf.cell(40, 10, str(row['DT']), 1)
+            pdf.cell(40, 10, str(row['Viento']), 1)
+            pdf.cell(40, 10, row['Direccion'], 1)
+            pdf.ln()
         
         nombre_archivo = f"Informe_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
         pdf.output(nombre_archivo)
@@ -301,8 +290,9 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
         with open(nombre_archivo, "rb") as f:
             st.download_button("📥 Descargar Informe PDF", f, file_name=nombre_archivo)
     else:
-        st.warning("No se registraron datos suficientes.")
+        st.warning("No se registraron datos suficientes (la aplicación fue muy corta).")
 
+    # Botón para limpiar estado y reiniciar
     if st.button("Nueva Aplicación"):
         st.session_state.inicio_app = None
         st.session_state.datos_registro = []
