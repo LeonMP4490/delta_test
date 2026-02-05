@@ -81,13 +81,20 @@ def cargar_datos():
             dir_txt = grados_a_direccion(data.get(ID_DIR, 0))
             ie_act = calcular_ie(t, hum)
             
-            # --- CORRECCIÓN HORA: Ajuste de 3 horas ---
+            # --- CORRECCIÓN HORA: Intento extraer de la API, si falla, uso local ---
             fecha_raw = data.get("date", "")
             if "T" in fecha_raw: 
                 fecha_dt = datetime.strptime(fecha_raw, '%Y-%m-%dT%H:%M:%S.%fZ')
                 fecha_local = fecha_dt - timedelta(hours=3)
                 hora_estacion = fecha_local.strftime('%H:%M')
-    except: pass
+            else:
+                # Si falla la API, pongo la hora actual del servidor - 3h
+                hora_estacion = (datetime.now() - timedelta(hours=3)).strftime('%H:%M')
+                
+    except: 
+        # Si falla la conexión, pongo la hora actual del servidor - 3h
+        hora_estacion = (datetime.now() - timedelta(hours=3)).strftime('%H:%M')
+
     try:
         df_h = pd.read_csv(URL_SHEET, skiprows=5)
         df_h.columns = ['Fecha', 'Temperatura', 'Humedad', 'Viento'] + list(df_h.columns[4:])
@@ -297,7 +304,6 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
         st.session_state.inicio_app = None
         st.session_state.datos_registro = []
         st.rerun()
-
 
 
 
