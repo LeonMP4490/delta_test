@@ -19,21 +19,21 @@ st.set_page_config(
     layout="wide"
 )
 
-# CSS PARA BAJAR EL LOGO Y AJUSTAR ESPACIOS
+# CSS CORREGIDO: Ajustes específicos para no aplastar el reloj
 st.markdown(f"""
     <style>
     .main {{ background-color: #ffffff; }}
     .block-container {{ padding-top: 1rem; padding-bottom: 0rem; }}
     
-    /* CORRECCIÓN: Ajustes para que no se corte el icono */
+    /* CORRECCIÓN: Estilos específicos para la imagen de cabecera */
     [data-testid="stImage"] {{ 
         display: flex; 
         justify-content: center; 
         margin-top: 5px; 
-        margin-bottom: 5px;
+        margin-bottom: 10px;
     }}
     [data-testid="stImage"] img {{
-        max-height: 80px; /* Ajusta este valor si sigue viéndose raro */
+        max-height: 100px;
         width: auto;
     }}
     </style>
@@ -117,13 +117,14 @@ with col_izq:
     elif ie_act < 2: color, rec = "#F1F8E9", "ROCÍO / MOJADO"
     else: color, rec = "#2E7D32", "ÓPTIMO"
 
-    # --- CORRECCIÓN HORA: Se añade {hora_estacion} aquí ---
+    # --- REVISIÓN: Asegurando que se muestre {hora_estacion} ---
     st.markdown(f"""<div style="background-color:{color}; padding:10px; border-radius:10px; text-align:center; color:black; border: 2px solid #333;">
                 <h3 style="margin:0; font-size:18px;">{rec}</h3>
                 <p style="margin:5px 0; font-size:15px;">Viento: <b>{v_act:.1f} km/h ({dir_txt})</b><br>Delta T: <b>{ie_act:.1f}°C</b></p>
                 <small>Actualizado: {hora_estacion} hs</small>
                 </div>""", unsafe_allow_html=True)
 
+    # --- RELOJ GRÁFICO (Revisado para no aplastarse) ---
     fig_g, ax_g = plt.subplots(figsize=(1.5, 1.2), subplot_kw={'projection': 'polar'})
     ax_g.bar(np.linspace(np.pi, 0, 5, endpoint=False), [1]*5, width=-np.pi/5, color=["#F1F8E9", "#2E7D32", "#FFF9C4", "#D32F2F", "#B39DDB"], align='edge', alpha=0.9)
     ang = 18 if (v_act<2 or v_act>15) else (54 if ie_act>=9.5 else (90 if (ie_act>=8 or v_act>=11) else (162 if ie_act<2 else 126)))
@@ -274,5 +275,15 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
         st.session_state.inicio_app = None
         st.session_state.datos_registro = []
         st.rerun()
+
+
+
+
+
+
+
+
+
+
 
 
