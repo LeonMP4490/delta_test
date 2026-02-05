@@ -9,7 +9,7 @@ from scipy.ndimage import gaussian_filter
 from scipy.interpolate import interp1d
 import requests
 from fpdf import FPDF
-import plotly.graph_objects as go  # <--- NUEVA LIBRERÍA
+import plotly.graph_objects as go  # Asegurate de tener plotly en requirements.txt
 
 # 1. CONFIGURACIÓN E ICONO
 URL_ICONO = "ICONO_2.png" 
@@ -20,7 +20,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS MEJORADO PARA ICONO Y CENTRADO ---
+# --- CSS MEJORADO ---
 st.markdown(f"""
     <style>
     .main {{ background-color: #ffffff; }}
@@ -36,12 +36,6 @@ st.markdown(f"""
     [data-testid="stImage"] img {{
         max-height: 100px;
         width: auto;
-    }}
-    
-    /* Asegura que el velocímetro se centre */
-    [data-testid="stPlotlyChart"] {{
-        display: flex;
-        justify-content: center;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -130,15 +124,15 @@ with col_izq:
                 <small>Actualizado: {hora_estacion} hs</small>
                 </div>""", unsafe_allow_html=True)
 
-    # --- NUEVO VELOCÍMETRO CON PLOTLY ---
+    # --- VELOCÍMETRO TRADICIONAL CON AGUJA ---
     fig_gauge = go.Figure(go.Indicator(
         mode = "gauge+number",
         value = ie_act,
         domain = {'x': [0, 1], 'y': [0, 1]},
         title = {'text': "Delta T (°C)", 'font': {'size': 16}},
         gauge = {
-            'axis': {'range': [0, 15], 'tickwidth': 1, 'tickcolor': "darkblue"},
-            'bar': {'color': "black"},
+            'axis': {'range': [0, 15], 'tickwidth': 1, 'tickcolor': "black"},
+            'bar': {'color': "rgba(0,0,0,0)"}, # Aguja invisible en la barra
             'bgcolor': "white",
             'borderwidth': 2,
             'bordercolor': "gray",
@@ -149,7 +143,7 @@ with col_izq:
                 {'range': [9.5, 15], 'color': "#D32F2F"} # Alta evap
             ],
             'threshold': {
-                'line': {'color': "red", 'width': 4},
+                'line': {'color': "black", 'width': 4}, # AGUJA (Threshold)
                 'thickness': 0.75,
                 'value': ie_act
             }
