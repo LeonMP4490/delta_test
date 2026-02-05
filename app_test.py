@@ -124,15 +124,15 @@ with col_izq:
                 <small>Actualizado: {hora_estacion} hs</small>
                 </div>""", unsafe_allow_html=True)
 
-    # --- VELOCÍMETRO TRADICIONAL (Solo Aguja) ---
+    # --- VELOCÍMETRO TRADICIONAL (Con Aguja) ---
     fig_gauge = go.Figure(go.Indicator(
-        mode = "gauge", # QUITAMOS "number"
+        mode = "gauge",
         value = ie_act,
         domain = {'x': [0, 1], 'y': [0, 1]},
         title = {'text': "Delta T (°C)", 'font': {'size': 16}},
         gauge = {
             'axis': {'range': [0, 15], 'tickwidth': 1, 'tickcolor': "black"},
-            'bar': {'color': "rgba(0,0,0,0)"},
+            'bar': {'color': "rgba(0,0,0,0)"}, # Ocultar barra de relleno
             'bgcolor': "white",
             'borderwidth': 2,
             'bordercolor': "gray",
@@ -142,8 +142,9 @@ with col_izq:
                 {'range': [8, 9.5], 'color': "#FFF9C4"}, # Precaución
                 {'range': [9.5, 15], 'color': "#D32F2F"} # Alta evap
             ],
+            # --- AGUJA ---
             'threshold': {
-                'line': {'color': "black", 'width': 4}, # AGUJA
+                'line': {'color': "black", 'width': 4},
                 'thickness': 0.75,
                 'value': ie_act
             }
@@ -296,6 +297,7 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
         st.session_state.inicio_app = None
         st.session_state.datos_registro = []
         st.rerun()
+
 
 
 
