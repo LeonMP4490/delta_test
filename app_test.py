@@ -9,7 +9,7 @@ from scipy.ndimage import gaussian_filter
 from scipy.interpolate import interp1d
 import requests
 from fpdf import FPDF
-import io
+import plotly.graph_objects as go  # <--- NUEVA LIBRERÍA
 
 # 1. CONFIGURACIÓN E ICONO
 URL_ICONO = "ICONO_2.png" 
@@ -20,7 +20,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS MEJORADO ---
+# --- CSS MEJORADO PARA ICONO Y CENTRADO ---
 st.markdown(f"""
     <style>
     .main {{ background-color: #ffffff; }}
@@ -36,6 +36,12 @@ st.markdown(f"""
     [data-testid="stImage"] img {{
         max-height: 100px;
         width: auto;
+    }}
+    
+    /* Asegura que el velocímetro se centre */
+    [data-testid="stPlotlyChart"] {{
+        display: flex;
+        justify-content: center;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -124,24 +130,34 @@ with col_izq:
                 <small>Actualizado: {hora_estacion} hs</small>
                 </div>""", unsafe_allow_html=True)
 
-    # --- RELOJ GRÁFICO NUEVO: Forzando cuadrado ---
-    fig_g, ax_g = plt.subplots(figsize=(4, 4), subplot_kw={'projection': 'polar'})
+    # --- NUEVO VELOCÍMETRO CON PLOTLY ---
+    fig_gauge = go.Figure(go.Indicator(
+        mode = "gauge+number",
+        value = ie_act,
+        domain = {'x': [0, 1], 'y': [0, 1]},
+        title = {'text': "Delta T (°C)", 'font': {'size': 16}},
+        gauge = {
+            'axis': {'range': [0, 15], 'tickwidth': 1, 'tickcolor': "darkblue"},
+            'bar': {'color': "black"},
+            'bgcolor': "white",
+            'borderwidth': 2,
+            'bordercolor': "gray",
+            'steps': [
+                {'range': [0, 2], 'color': "#F1F8E9"}, # Rocío
+                {'range': [2, 8], 'color': "#2E7D32"}, # Óptimo
+                {'range': [8, 9.5], 'color': "#FFF9C4"}, # Precaución
+                {'range': [9.5, 15], 'color': "#D32F2F"} # Alta evap
+            ],
+            'threshold': {
+                'line': {'color': "red", 'width': 4},
+                'thickness': 0.75,
+                'value': ie_act
+            }
+        }))
     
-    # 1. FORZAR CUADRADO PERFECTO EN MATPLOTLIB
-    ax_g.set_aspect('equal', adjustable='box')
-    
-    # Dibujar sectores (colores)
-    ax_g.bar(np.linspace(np.pi, 0, 5, endpoint=False), [1]*5, width=-np.pi/5, color=["#F1F8E9", "#2E7D32", "#FFF9C4", "#D32F2F", "#B39DDB"], align='edge', alpha=0.9)
-    
-    # Calcular ángulo de la aguja
-    ang = 18 if (v_act<2 or v_act>15) else (54 if ie_act>=9.5 else (90 if (ie_act>=8 or v_act>=11) else (162 if ie_act<2 else 126)))
-    
-    # Dibujar aguja
-    ax_g.annotate('', xy=(np.radians(ang), 1.0), xytext=(0, 0), arrowprops=dict(facecolor='black', width=3, headwidth=8))
-    ax_g.set_axis_off()
-    
-    # 2. MOSTRAR SIN ESTIRAR AL ANCHO
-    st.pyplot(fig_g, use_container_width=False) 
+    # Ajuste de tamaño para celular
+    fig_gauge.update_layout(height=250, margin=dict(l=20, r=20, t=30, b=10))
+    st.plotly_chart(fig_gauge, use_container_width=True)
 
     # --- BOTONES DE CONTROL DE APLICACIÓN ---
     st.markdown("---")
