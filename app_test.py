@@ -11,7 +11,6 @@ import requests
 from fpdf import FPDF
 
 # 1. CONFIGURACIÓN E ICONO
-# CORRECCIÓN: Nombre del archivo de imagen
 URL_ICONO = "ICONO_2.png" 
 
 st.set_page_config(
@@ -26,12 +25,16 @@ st.markdown(f"""
     .main {{ background-color: #ffffff; }}
     .block-container {{ padding-top: 1rem; padding-bottom: 0rem; }}
     
-    /* Centrado de logo y margen superior interno */
+    /* CORRECCIÓN: Ajustes para que no se corte el icono */
     [data-testid="stImage"] {{ 
         display: flex; 
         justify-content: center; 
-        margin-top: 10px; 
+        margin-top: 5px; 
         margin-bottom: 5px;
+    }}
+    [data-testid="stImage"] img {{
+        max-height: 80px; /* Ajusta este valor si sigue viéndose raro */
+        width: auto;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -100,10 +103,7 @@ def cargar_datos():
 v_act, ie_act, dir_txt, hora_estacion, df_h = cargar_datos()
 
 # --- 4. INTERFAZ VISUAL ---
-try:
-    st.image(URL_ICONO, width=100)
-except:
-    st.write("📡")
+st.image(URL_ICONO)
 
 st.markdown(f"<h3 style='text-align: center; color: #1A237E; margin-bottom: 0px;'>Monitor Bouquet</h3>", unsafe_allow_html=True)
 st.markdown(f"<p style='text-align: center; color: #555; font-weight: bold; margin-top: 0px;'>Ing. Agr. León - MP 4490</p>", unsafe_allow_html=True)
@@ -190,7 +190,6 @@ st.caption(f"Estación Cooperativa de Bouquet | {(datetime.now() - timedelta(hou
 
 # --- 5. GENERACIÓN DE PDF Y RESUMEN ---
 st.markdown("---")
-# ESTRUCTURA CORREGIDA: Se asegura que el contenedor principal esté al final
 if not st.session_state.aplicando and st.session_state.inicio_app:
     st.success("✅ Aplicación finalizada. Generando reporte...")
     
