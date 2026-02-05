@@ -11,7 +11,8 @@ import requests
 from fpdf import FPDF
 
 # 1. CONFIGURACIÓN E ICONO
-URL_ICONO = "icon.png"
+# Cambiado a icono de estación meteorológica
+URL_ICONO = "https://cdn-icons-png.flaticon.com/512/869/869151.png"
 
 st.set_page_config(
     page_title="Monitor León MP 4490", 
@@ -23,14 +24,14 @@ st.set_page_config(
 st.markdown(f"""
     <style>
     .main {{ background-color: #ffffff; }}
-    .block-container {{ padding-top: 2rem; padding-bottom: 0rem; }}
+    .block-container {{ padding-top: 1rem; padding-bottom: 0rem; }}
     
     /* Centrado de logo y margen superior interno */
     [data-testid="stImage"] {{ 
         display: flex; 
         justify-content: center; 
-        margin-top: 20px; 
-        margin-bottom: 10px;
+        margin-top: 10px; 
+        margin-bottom: 5px;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -99,10 +100,7 @@ def cargar_datos():
 v_act, ie_act, dir_txt, hora_estacion, df_h = cargar_datos()
 
 # --- 4. INTERFAZ VISUAL ---
-try:
-    st.image(URL_ICONO, width=100)
-except:
-    st.write("🚜")
+st.image(URL_ICONO, width=60)
 
 st.markdown(f"<h3 style='text-align: center; color: #1A237E; margin-bottom: 0px;'>Monitor Bouquet</h3>", unsafe_allow_html=True)
 st.markdown(f"<p style='text-align: center; color: #555; font-weight: bold; margin-top: 0px;'>Ing. Agr. León - MP 4490</p>", unsafe_allow_html=True)
@@ -116,6 +114,7 @@ with col_izq:
     elif ie_act < 2: color, rec = "#F1F8E9", "ROCÍO / MOJADO"
     else: color, rec = "#2E7D32", "ÓPTIMO"
 
+    # --- CORRECCIÓN HORA: Se añade {hora_estacion} aquí ---
     st.markdown(f"""<div style="background-color:{color}; padding:10px; border-radius:10px; text-align:center; color:black; border: 2px solid #333;">
                 <h3 style="margin:0; font-size:18px;">{rec}</h3>
                 <p style="margin:5px 0; font-size:15px;">Viento: <b>{v_act:.1f} km/h ({dir_txt})</b><br>Delta T: <b>{ie_act:.1f}°C</b></p>
@@ -187,6 +186,7 @@ st.markdown("<p style='font-size: 12px; text-align: center; font-weight: bold;'>
 st.caption(f"Estación Cooperativa de Bouquet | {(datetime.now() - timedelta(hours=3)).strftime('%d/%m %H:%M')}")
 
 # --- 5. GENERACIÓN DE PDF Y RESUMEN ---
+st.markdown("---")
 if not st.session_state.aplicando and st.session_state.inicio_app:
     st.success("✅ Aplicación finalizada. Generando reporte...")
     
@@ -271,3 +271,4 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
         st.session_state.inicio_app = None
         st.session_state.datos_registro = []
         st.rerun()
+
