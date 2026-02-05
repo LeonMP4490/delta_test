@@ -81,18 +81,15 @@ def cargar_datos():
             dir_txt = grados_a_direccion(data.get(ID_DIR, 0))
             ie_act = calcular_ie(t, hum)
             
-            # --- CORRECCIÓN HORA: Intento extraer de la API, si falla, uso local ---
+            # --- CORRECCIÓN HORA ---
             fecha_raw = data.get("date", "")
             if "T" in fecha_raw: 
                 fecha_dt = datetime.strptime(fecha_raw, '%Y-%m-%dT%H:%M:%S.%fZ')
                 fecha_local = fecha_dt - timedelta(hours=3)
                 hora_estacion = fecha_local.strftime('%H:%M')
             else:
-                # Si falla la API, pongo la hora actual del servidor - 3h
                 hora_estacion = (datetime.now() - timedelta(hours=3)).strftime('%H:%M')
-                
     except: 
-        # Si falla la conexión, pongo la hora actual del servidor - 3h
         hora_estacion = (datetime.now() - timedelta(hours=3)).strftime('%H:%M')
 
     try:
@@ -124,14 +121,14 @@ with col_izq:
     elif ie_act < 2: color, rec = "#F1F8E9", "ROCÍO / MOJADO"
     else: color, rec = "#2E7D32", "ÓPTIMO"
 
-    # --- CARTEL DE RECOMENDACIÓN CON HORA CORREGIDA ---
+    # --- CARTEL DE RECOMENDACIÓN ---
     st.markdown(f"""<div style="background-color:{color}; padding:15px; border-radius:10px; text-align:center; color:black; border: 2px solid #333;">
                 <h3 style="margin:0; font-size:20px;">{rec}</h3>
                 <p style="margin:8px 0; font-size:16px;">Viento: <b>{v_act:.1f} km/h ({dir_txt})</b><br>Delta T: <b>{ie_act:.1f}°C</b></p>
                 <p style="margin:0; font-size:13px; font-weight:bold;">Actualizado: {hora_estacion} hs</p>
                 </div>""", unsafe_allow_html=True)
 
-    # --- VELOCÍMETRO ESTÁNDAR (Aguja Gruesa) ---
+    # --- VELOCÍMETRO ESTÁNDAR ---
     fig_gauge = go.Figure(go.Indicator(
         mode = "gauge+number",
         value = ie_act,
@@ -144,24 +141,22 @@ with col_izq:
             'borderwidth': 2,
             'bordercolor': "gray",
             'steps': [
-                {'range': [0, 2], 'color': "#F1F8E9"}, # Rocío
-                {'range': [2, 8], 'color': "#2E7D32"}, # Óptimo
-                {'range': [8, 9.5], 'color': "#FFF9C4"}, # Precaución
-                {'range': [9.5, 15], 'color': "#D32F2F"} # Alta evap
+                {'range': [0, 2], 'color': "#F1F8E9"}, 
+                {'range': [2, 8], 'color': "#2E7D32"},
+                {'range': [8, 9.5], 'color': "#FFF9C4"},
+                {'range': [9.5, 15], 'color': "#D32F2F"}
             ],
-            # --- AGUJA ---
             'threshold': {
-                'line': {'color': "black", 'width': 6}, # MÁS GRUESA
+                'line': {'color': "black", 'width': 6}, 
                 'thickness': 0.8,
                 'value': ie_act
             }
         }))
     
-    # Ajuste de tamaño
     fig_gauge.update_layout(height=250, margin=dict(l=20, r=20, t=30, b=10))
     st.plotly_chart(fig_gauge, use_container_width=True)
 
-    # --- BOTONES DE CONTROL DE APLICACIÓN ---
+    # --- BOTONES DE CONTROL ---
     st.markdown("---")
     if not st.session_state.aplicando:
         if st.button("🔴 Iniciar Aplicación", use_container_width=True):
@@ -172,8 +167,6 @@ with col_izq:
             st.rerun()
     else:
         st.warning(f"⚠️ Aplicación en curso... Iniciada: {st.session_state.inicio_app.strftime('%H:%M:%S')}")
-        
-        # --- Lógica de registro cada 10 min ---
         ahora = datetime.now()
         if (ahora - st.session_state.ultimo_registro) > timedelta(minutes=10):
             st.session_state.datos_registro.append({
@@ -188,7 +181,8 @@ with col_izq:
             st.rerun()
 
 with col_der:
-    fig, ax = plt.subplots(figsize=(10, 5.2))
+    # --- GRÁFICO HISTÓRICO AMPLIADO ---
+    fig, ax = plt.subplots(figsize=(10, 6.5)) # ALTURA AUMENTADA A 6.5
     cmap_om = LinearSegmentedColormap.from_list("om", ["#F1F8E9", "#2E7D32", "#FFF9C4", "#D32F2F", "#B39DDB"])
     if not df_h.empty:
         xn = mdates.date2num(df_h['Fecha'])
@@ -222,88 +216,23 @@ st.caption(f"Estación Cooperativa de Bouquet | {(datetime.now() - timedelta(hou
 st.markdown("---")
 if not st.session_state.aplicando and st.session_state.inicio_app:
     st.success("✅ Aplicación finalizada. Generando reporte...")
-    
     df = pd.DataFrame(st.session_state.datos_registro)
-    
     if not df.empty:
         st.subheader("Resumen de Registros de la Aplicación")
-        
-        # --- Formatear decimales para visualización ---
         df_display = df.copy()
         df_display['DT'] = df_display['DT'].map('{:,.2f}'.format)
         df_display['Viento'] = df_display['Viento'].map('{:,.2f}'.format)
-        
-        # --- Mostrar tabla ---
         st.dataframe(df_display, use_container_width=True)
-        
-        # --- CÁLCULOS DETALLADOS ---
-        min_dt = df['DT'].min()
-        max_dt = df['DT'].max()
-        mean_dt = df['DT'].mean()
-        mean_viento = df['Viento'].mean()
+        min_dt = df['DT'].min(); max_dt = df['DT'].max(); mean_dt = df['DT'].mean(); mean_viento = df['Viento'].mean()
         dir_predominante = df['Direccion'].mode()[0] if not df['Direccion'].mode().empty else "N/A"
-        
-        # Métricas
         col_res1, col_res2, col_res3 = st.columns(3)
-        col_res1.metric("Delta T Promedio", f"{mean_dt:.1f} °C")
-        col_res2.metric("Delta T Min/Max", f"{min_dt:.1f} / {max_dt:.1f} °C")
-        col_res3.metric("Viento Promedio", f"{mean_viento:.1f} km/h")
+        col_res1.metric("Delta T Promedio", f"{mean_dt:.1f} °C"); col_res2.metric("Delta T Min/Max", f"{min_dt:.1f} / {max_dt:.1f} °C"); col_res3.metric("Viento Promedio", f"{mean_viento:.1f} km/h")
         st.write(f"**Dirección Viento Predominante:** {dir_predominante}")
-        
-        # --- Generar PDF ---
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", size=12)
-        
-        # Título
-        pdf.set_font("Arial", 'B', 16)
-        pdf.cell(200, 10, txt="Informe de Aplicación - Monitor Leon", ln=1, align='C')
-        pdf.ln(10)
-        
-        # Info general
-        pdf.set_font("Arial", size=12)
-        pdf.cell(200, 10, txt=f"Ingeniero: León - MP 4490", ln=1)
-        pdf.cell(200, 10, txt=f"Inicio: {st.session_state.inicio_app.strftime('%d/%m/%Y %H:%M')}", ln=1)
-        pdf.cell(200, 10, txt=f"Fin: {(datetime.now() - timedelta(hours=3)).strftime('%d/%m/%Y %H:%M')}", ln=1)
-        pdf.ln(5)
-        
-        # Estadísticas Detalladas
-        pdf.set_font("Arial", 'B', 12)
-        pdf.cell(200, 10, txt="Resumen Estadístico:", ln=1)
-        pdf.set_font("Arial", size=12)
-        pdf.cell(200, 10, txt=f"- Delta T: Prom {mean_dt:.1f}°C (Min {min_dt:.1f}°C - Max {max_dt:.1f}°C)", ln=1)
-        pdf.cell(200, 10, txt=f"- Viento: Prom {mean_viento:.1f} km/h - Predom: {dir_predominante}", ln=1)
-        pdf.ln(10)
-        
-        # Tabla de datos en PDF
-        pdf.set_font("Arial", 'B', 10)
-        pdf.cell(40, 10, "Hora", 1)
-        pdf.cell(40, 10, "Delta T (°C)", 1)
-        pdf.cell(40, 10, "Viento (km/h)", 1)
-        pdf.cell(40, 10, "Direccion", 1)
-        pdf.ln()
-        
-        pdf.set_font("Arial", size=10)
-        for _, row in df.iterrows():
-            pdf.cell(40, 10, row['Hora'], 1)
-            pdf.cell(40, 10, str(row['DT']), 1)
-            pdf.cell(40, 10, str(row['Viento']), 1)
-            pdf.cell(40, 10, row['Direccion'], 1)
-            pdf.ln()
-        
-        nombre_archivo = f"Informe_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
-        pdf.output(nombre_archivo)
-        
-        with open(nombre_archivo, "rb") as f:
-            st.download_button("📥 Descargar Informe PDF", f, file_name=nombre_archivo)
-    else:
-        st.warning("No se registraron datos suficientes (la aplicación fue muy corta).")
-
-    # Botón para limpiar estado y reiniciar
+        pdf = FPDF(); pdf.add_page(); pdf.set_font("Arial", size=12); pdf.set_font("Arial", 'B', 16); pdf.cell(200, 10, txt="Informe de Aplicación - Monitor Leon", ln=1, align='C'); pdf.ln(10); pdf.set_font("Arial", size=12); pdf.cell(200, 10, txt=f"Ingeniero: León - MP 4490", ln=1); pdf.cell(200, 10, txt=f"Inicio: {st.session_state.inicio_app.strftime('%d/%m/%Y %H:%M')}", ln=1); pdf.cell(200, 10, txt=f"Fin: {(datetime.now() - timedelta(hours=3)).strftime('%d/%m/%Y %H:%M')}", ln=1); pdf.ln(5); pdf.set_font("Arial", 'B', 12); pdf.cell(200, 10, txt="Resumen Estadístico:", ln=1); pdf.set_font("Arial", size=12); pdf.cell(200, 10, txt=f"- Delta T: Prom {mean_dt:.1f}°C (Min {min_dt:.1f}°C - Max {max_dt:.1f}°C)", ln=1); pdf.cell(200, 10, txt=f"- Viento: Prom {mean_viento:.1f} km/h - Predom: {dir_predominante}", ln=1); pdf.ln(10); pdf.set_font("Arial", 'B', 10); pdf.cell(40, 10, "Hora", 1); pdf.cell(40, 10, "Delta T (°C)", 1); pdf.cell(40, 10, "Viento (km/h)", 1); pdf.cell(40, 10, "Direccion", 1); pdf.ln(); pdf.set_font("Arial", size=10)
+        for _, row in df.iterrows(): pdf.cell(40, 10, row['Hora'], 1); pdf.cell(40, 10, str(row['DT']), 1); pdf.cell(40, 10, str(row['Viento']), 1); pdf.cell(40, 10, row['Direccion'], 1); pdf.ln()
+        nombre_archivo = f"Informe_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"; pdf.output(nombre_archivo)
+        with open(nombre_archivo, "rb") as f: st.download_button("📥 Descargar Informe PDF", f, file_name=nombre_archivo)
+    else: st.warning("No se registraron datos suficientes (la aplicación fue muy corta).")
     if st.button("Nueva Aplicación"):
-        st.session_state.inicio_app = None
-        st.session_state.datos_registro = []
-        st.rerun()
-
-
+        st.session_state.inicio_app = None; st.session_state.datos_registro = []; st.rerun()
 
