@@ -20,7 +20,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS MEJORADO ---
+# --- CSS MEJORADO PARA MÓVILES ---
 st.markdown(f"""
     <style>
     .main {{ background-color: #ffffff; }}
@@ -29,12 +29,18 @@ st.markdown(f"""
     [data-testid="stImage"] {{ 
         display: flex; 
         justify-content: center; 
-        margin-top: 20px;
-        margin-bottom: 10px;
+        margin-top: 10px;
+        margin-bottom: 5px;
     }}
     [data-testid="stImage"] img {{
-        max-height: 100px;
+        max-height: 80px;
         width: auto;
+    }}
+    /* Ajuste para columnas en móvil */
+    @media (max-width: 768px) {{
+        [data-testid="stVerticalBlock"] {{
+            gap: 1rem;
+        }}
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -125,23 +131,24 @@ with col_izq:
     else: color, rec = "#2E7D32", "ÓPTIMO"
 
     # --- CARTEL DE RECOMENDACIÓN ---
-    st.markdown(f"""<div style="background-color:{color}; padding:15px; border-radius:10px; text-align:center; color:black; border: 2px solid #333;">
-                <h3 style="margin:0; font-size:20px;">{rec}</h3>
-                <p style="margin:8px 0; font-size:16px;">Viento: <b>{v_act:.1f} km/h ({dir_txt})</b><br>Delta T: <b>{ie_act:.1f}°C</b></p>
-                <p style="margin:0; font-size:13px; font-weight:bold;">Actualizado: {hora_estacion} hs</p>
+    st.markdown(f"""<div style="background-color:{color}; padding:10px; border-radius:10px; text-align:center; color:black; border: 2px solid #333;">
+                <h3 style="margin:0; font-size:18px;">{rec}</h3>
+                <p style="margin:5px 0; font-size:14px;">Viento: <b>{v_act:.1f} km/h ({dir_txt})</b><br>Delta T: <b>{ie_act:.1f}°C</b></p>
+                <p style="margin:0; font-size:12px; font-weight:bold;">Actualizado: {hora_estacion} hs</p>
                 </div>""", unsafe_allow_html=True)
 
-    # --- VELOCÍMETRO ESTÁNDAR ---
+    # --- VELOCÍMETRO PLOTLY (Fuentes reducidas) ---
     fig_gauge = go.Figure(go.Indicator(
         mode = "gauge+number",
         value = ie_act,
         domain = {'x': [0, 1], 'y': [0, 1]},
-        title = {'text': "Delta T (°C)", 'font': {'size': 16}},
+        title = {'text': "Delta T (°C)", 'font': {'size': 14}},
+        number = {'font': {'size': 35}}, # Tamaño número central
         gauge = {
-            'axis': {'range': [0, 15], 'tickwidth': 1, 'tickcolor': "black"},
+            'axis': {'range': [0, 15], 'tickwidth': 1, 'tickcolor': "black", 'tickfont': {'size': 10}},
             'bar': {'color': "rgba(0,0,0,0)"},
             'bgcolor': "white",
-            'borderwidth': 2,
+            'borderwidth': 1,
             'bordercolor': "gray",
             'steps': [
                 {'range': [0, 2], 'color': "#F1F8E9"}, 
@@ -150,13 +157,13 @@ with col_izq:
                 {'range': [9.5, 15], 'color': "#D32F2F"}
             ],
             'threshold': {
-                'line': {'color': "black", 'width': 6}, 
+                'line': {'color': "black", 'width': 4}, 
                 'thickness': 0.8,
                 'value': ie_act
             }
         }))
     
-    fig_gauge.update_layout(height=250, margin=dict(l=20, r=20, t=30, b=10))
+    fig_gauge.update_layout(height=200, margin=dict(l=10, r=10, t=25, b=5))
     st.plotly_chart(fig_gauge, use_container_width=True)
 
     # --- BOTONES DE CONTROL ---
@@ -184,8 +191,8 @@ with col_izq:
             st.rerun()
 
 with col_der:
-    # --- GRÁFICO HISTÓRICO CON MÁS ALTURA Y EJE X ---
-    fig, ax = plt.subplots(figsize=(10, 8)) # ALTURA AUMENTADA A 8
+    # --- GRÁFICO HISTÓRICO MATPLOTLIB (Altura aumentada) ---
+    fig, ax = plt.subplots(figsize=(10, 8)) # Altura 8 para ocupar más pantalla
     cmap_om = LinearSegmentedColormap.from_list("om", ["#F1F8E9", "#2E7D32", "#FFF9C4", "#D32F2F", "#B39DDB"])
     if not df_h.empty:
         xn = mdates.date2num(df_h['Fecha'])
@@ -203,21 +210,20 @@ with col_der:
                 elif vy < 9.5: Z[j, i] = 0.65 
                 else: Z[j, i] = 0.85 
         ax.pcolormesh(X, Y, gaussian_filter(Z, sigma=(1, 4)), cmap=cmap_om, shading='gouraud', alpha=0.6)
-        ax.plot(df_h['Fecha'], df_h['IE'], color='black', lw=2.5, marker='o', markersize=4)
+        ax.plot(df_h['Fecha'], df_h['IE'], color='black', lw=2, marker='o', markersize=3)
         ax.set_ylim(0, 13)
         
-        # --- EJE X MEJORADO ---
+        # --- EJE X ---
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%d/%m\n%H:%M'))
-        ax.xaxis.set_major_locator(mdates.HourLocator(interval=6)) # Marca cada 6 horas
+        ax.xaxis.set_major_locator(mdates.HourLocator(interval=6))
         
         ax.tick_params(axis='both', labelsize=10) 
-        ax.set_ylabel("Delta T (°C)", fontsize=13, fontweight='bold')
+        ax.set_ylabel("Delta T (°C)", fontsize=12, fontweight='bold')
         ax.grid(True, alpha=0.3)
-        plt.xticks(rotation=0) # Evita rotación para leer mejor
         
     st.pyplot(fig, use_container_width=True)
 
-st.markdown("<p style='font-size: 12px; text-align: center; font-weight: bold;'>⬜ Rocío | 🟩 Óptimo | 🟨 Precaución | 🟥 Alta Evap | 🟪Viento Prohibido</p>", unsafe_allow_html=True)
+st.markdown("<p style='font-size: 11px; text-align: center; font-weight: bold;'>⬜ Rocío | 🟩 Óptimo | 🟨 Precaución | 🟥 Alta Evap | 🟪Viento Prohibido</p>", unsafe_allow_html=True)
 st.caption(f"Estación Cooperativa de Bouquet | {(datetime.now() - timedelta(hours=3)).strftime('%d/%m %H:%M')}")
 
 # --- 5. GENERACIÓN DE PDF Y RESUMEN ---
