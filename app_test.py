@@ -124,7 +124,7 @@ with col_izq:
                 <small>Actualizado: {hora_estacion} hs</small>
                 </div>""", unsafe_allow_html=True)
 
-    # --- VELOCÍMETRO TÉCNICO (Aguja Central Pivote) ---
+    # --- VELOCÍMETRO TÉCNICO (Aguja Central Pivote Semicircular) ---
     
     # 1. Crear el fondo del reloj (Semicírculo de colores)
     fig = go.Figure()
@@ -135,17 +135,30 @@ with col_izq:
         values=[2, 6, 1.5, 5.5], 
         labels=["Rocío", "Óptimo", "Precaución", "Alta"],
         marker=dict(colors=["#F1F8E9", "#2E7D32", "#FFF9C4", "#D32F2F"]),
-        hole=0.6, # Tamaño del agujero central
+        hole=0.7, # Tamaño del agujero central
         direction="clockwise",
         sort=False,
-        rotation=90, # 90 grados para que inicie horizontalmente
+        rotation=90, # 90 grados para que inicie horizontalmente (semicírculo inferior)
         showlegend=False,
         hoverinfo="label"
     ))
+    
+    # --- Ocultar la mitad superior para crear el semicírculo ---
+    # Esto es un truco técnico en Plotly
+    fig.add_trace(go.Pie(
+        values=[15, 15], 
+        labels=["Oculto", "Visible"],
+        marker=dict(colors=["rgba(0,0,0,0)", "white"]), # Mitad invisible, mitad blanca
+        hole=0.7,
+        direction="clockwise",
+        sort=False,
+        rotation=90,
+        showlegend=False,
+        hoverinfo="skip"
+    ))
 
     # 2. Calcular ángulo de la aguja 
-    # El eje central es el origen (0,0)
-    # mapear el valor 0-15 a un ángulo de 180 grados
+    # Mapear el valor 0-15 a un ángulo de 180 grados
     angulo = 180 - (ie_act / 15 * 180)
     
     # 3. Dibujar la aguja usando una anotación (flecha)
@@ -170,7 +183,7 @@ with col_izq:
         hoverinfo="skip"
     ))
 
-    # Ajustes finales del layout para que parezca un reloj
+    # Ajustes finales del layout para que parezca un reloj semicircular
     fig.update_layout(
         height=250,
         margin=dict(l=10, r=10, t=10, b=10),
