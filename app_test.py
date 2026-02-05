@@ -8,7 +8,7 @@ from matplotlib.colors import LinearSegmentedColormap
 from scipy.ndimage import gaussian_filter
 from scipy.interpolate import interp1d
 import requests
-from fpdf import FPDF # <-- IMPORTANTE: Librería para el PDF
+from fpdf import FPDF
 
 # 1. CONFIGURACIÓN E ICONO
 URL_ICONO = "icon.png"
@@ -43,7 +43,7 @@ ID_TEMP, ID_HUM, ID_VIENTO, ID_DIR = "19951", "19937", "19954", "19933"
 SHEET_ID = "1r0sqF8qNFBgVesDY_cqKKL71hQzmBXnGsQZVlszl0hk"
 URL_SHEET = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv"
 
-# --- 3. GESTIÓN DE SESIÓN (ESTADOS PARA EL REGISTRO) ---
+# --- 3. GESTIÓN DE SESIÓN (ESTADOS) ---
 if 'aplicando' not in st.session_state: st.session_state.aplicando = False
 if 'datos_registro' not in st.session_state: st.session_state.datos_registro = []
 if 'inicio_app' not in st.session_state: st.session_state.inicio_app = None
@@ -77,7 +77,11 @@ def cargar_datos():
             dir_txt = grados_a_direccion(data.get(ID_DIR, 0))
             ie_act = calcular_ie(t, hum)
             fecha_raw = data.get("date", "")
-            if "T" in fecha_raw: hora_estacion = fecha_raw.split("T")[1][:5]
+            # CORRECCIÓN HORA: Ajuste de 3 horas
+            if "T" in fecha_raw: 
+                fecha_dt = datetime.strptime(fecha_raw, '%Y-%m-%dT%H:%M:%S.%fZ')
+                fecha_local = fecha_dt - timedelta(hours=3)
+                hora_estacion = fecha_local.strftime('%H:%M')
     except: pass
     try:
         df_h = pd.read_csv(URL_SHEET, skiprows=5)
@@ -129,18 +133,21 @@ with col_izq:
     if not st.session_state.aplicando:
         if st.button("🔴 Iniciar Aplicación", use_container_width=True):
             st.session_state.aplicando = True
-            st.session_state.datos_registro = [] # Limpiar registros anteriores
-            st.session_state.inicio_app = datetime.now()
-            st.session_state.ultimo_registro = datetime.now() # Iniciamos el reloj
+            st.session_state.datos_registro = [] 
+            # CORRECCIÓN HORA: Usar hora local ajustada para inicio
+            st.session_state.inicio_app = datetime.now() - timedelta(hours=3)
+            st.session_state.ultimo_registro = datetime.now() - timedelta(minutes=11) # Permitir registro inmediato
             st.rerun()
     else:
-        st.warning(f"⚠️ Aplicación en curso... Iniciada: {st.session_state.inicio_app.strftime('%H:%M:%S')}")
+        # CORRECCIÓN HORA: Mostrar hora ajustada
+        hora_formateada = st.session_state.inicio_app.strftime('%H:%M:%S')
+        st.warning(f"⚠️ Aplicación en curso... Iniciada: {hora_formateada}")
         
         # --- Lógica de registro cada 10 min ---
         ahora = datetime.now()
         if (ahora - st.session_state.ultimo_registro) > timedelta(minutes=10):
             st.session_state.datos_registro.append({
-                'Hora': ahora.strftime('%H:%M:%S'),
+                'Hora': (ahora - timedelta(hours=3)).strftime('%H:%M:%S'),
                 'DT': ie_act, 'Viento': v_act, 'Direccion': dir_txt
             })
             st.session_state.ultimo_registro = ahora
@@ -179,9 +186,9 @@ with col_der:
     st.pyplot(fig, use_container_width=True)
 
 st.markdown("<p style='font-size: 12px; text-align: center; font-weight: bold;'>⬜ Rocío | 🟩 Óptimo | 🟨 Precaución | 🟥 Alta Evap | 🟪Viento Prohibido</p>", unsafe_allow_html=True)
-st.caption(f"Estación Cooperativa de Bouquet | {datetime.now().strftime('%d/%m %H:%M')}")
+st.caption(f"Estación Cooperativa de Bouquet | {(datetime.now() - timedelta(hours=3)).strftime('%d/%m %H:%M')}")
 
-# --- 5. GENERACIÓN DE PDF (Al finalizar) ---
+# --- 5. GENERACIÓN DE PDF ---
 if not st.session_state.aplicando and st.session_state.inicio_app:
     st.success("✅ Aplicación finalizada. Generando reporte...")
     
@@ -191,13 +198,19 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
         st.subheader("Resumen de Registros de la Aplicación")
         st.dataframe(df)
         
-        # Cálculos
+        # --- CÁLCULOS DETALLADOS ---
         min_dt = df['DT'].min()
         max_dt = df['DT'].max()
         mean_dt = df['DT'].mean()
+        mean_viento = df['Viento'].mean()
+        dir_predominante = df['Direccion'].mode()[0] if not df['Direccion'].mode().empty else "N/A"
         
-        st.write(f"**Min Delta T:** {min_dt} °C | **Max Delta T:** {max_dt} °C")
-        st.write(f"**Promedio Delta T:** {mean_dt:.2f} °C")
+        # Mostrar en pantalla
+        col_res1, col_res2, col_res3 = st.columns(3)
+        col_res1.metric("Delta T Promedio", f"{mean_dt:.1f} °C")
+        col_res2.metric("Delta T Min/Max", f"{min_dt:.1f} / {max_dt:.1f} °C")
+        col_res3.metric("Viento Promedio", f"{mean_viento:.1f} km/h")
+        st.write(f"**Dirección Viento Predominante:** {dir_predominante}")
         
         # --- Generar PDF ---
         pdf = FPDF()
@@ -213,14 +226,15 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
         pdf.set_font("Arial", size=12)
         pdf.cell(200, 10, txt=f"Ingeniero: León - MP 4490", ln=1)
         pdf.cell(200, 10, txt=f"Inicio: {st.session_state.inicio_app.strftime('%d/%m/%Y %H:%M')}", ln=1)
-        pdf.cell(200, 10, txt=f"Fin: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=1)
+        pdf.cell(200, 10, txt=f"Fin: {(datetime.now() - timedelta(hours=3)).strftime('%d/%m/%Y %H:%M')}", ln=1)
         pdf.ln(5)
         
-        # Estadísticas
+        # Estadísticas Detalladas
         pdf.set_font("Arial", 'B', 12)
-        pdf.cell(200, 10, txt="Estadísticas Delta T:", ln=1)
+        pdf.cell(200, 10, txt="Resumen Estadístico:", ln=1)
         pdf.set_font("Arial", size=12)
-        pdf.cell(200, 10, txt=f"Min: {min_dt:.1f} °C - Max: {max_dt:.1f} °C - Promedio: {mean_dt:.1f} °C", ln=1)
+        pdf.cell(200, 10, txt=f"- Delta T: Prom {mean_dt:.1f}°C (Min {min_dt:.1f}°C - Max {max_dt:.1f}°C)", ln=1)
+        pdf.cell(200, 10, txt=f"- Viento: Prom {mean_viento:.1f} km/h - Predom: {dir_predominante}", ln=1)
         pdf.ln(10)
         
         # Tabla de datos
