@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import plotly.express as px
 from datetime import timedelta, datetime
 import requests
 from fpdf import FPDF
@@ -32,10 +31,6 @@ st.markdown(f"""
     [data-testid="stImage"] img {{
         max-height: 80px;
         width: auto;
-    }}
-    /* Asegurar que los gráficos no tengan scroll innecesario */
-    .element-container {{
-        width: 100%;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -82,7 +77,6 @@ def cargar_datos():
             dir_txt = grados_a_direccion(data.get(ID_DIR, 0))
             ie_act = calcular_ie(t, hum)
             
-            # --- CORRECCIÓN HORA ---
             fecha_raw = data.get("date", "")
             if "T" in fecha_raw: 
                 fecha_dt = datetime.strptime(fecha_raw, '%Y-%m-%dT%H:%M:%S.%fZ')
@@ -185,11 +179,24 @@ with col_izq:
             st.rerun()
 
 with col_der:
-    # --- GRÁFICO HISTÓRICO PLOTLY (Reemplaza a Matplotlib) ---
+    # --- GRÁFICO HISTÓRICO PLOTLY CON FONDOS DE RIESGO ---
     if not df_h.empty:
         fig = go.Figure()
         
-        # Añadir la línea de Delta T
+        # 1. Definir áreas de riesgo coloreadas (HRECT)
+        # Fondo Prohibido Viento (Purple overlay)
+        fig.add_hrect(y0=0, y1=15, fillcolor="#B39DDB", opacity=0.2, line_width=0, layer="below", name="Prohibido Viento")
+        
+        # Fondo Rocío
+        fig.add_hrect(y0=0, y1=2, fillcolor="#F1F8E9", opacity=0.8, line_width=0, layer="below")
+        # Fondo Óptimo
+        fig.add_hrect(y0=2, y1=8, fillcolor="#2E7D32", opacity=0.4, line_width=0, layer="below")
+        # Fondo Precaución
+        fig.add_hrect(y0=8, y1=9.5, fillcolor="#FFF9C4", opacity=0.6, line_width=0, layer="below")
+        # Fondo Peligro
+        fig.add_hrect(y0=9.5, y1=15, fillcolor="#D32F2F", opacity=0.4, line_width=0, layer="below")
+
+        # 2. Añadir la línea de Delta T
         fig.add_trace(go.Scatter(
             x=df_h['Fecha'], 
             y=df_h['IE'],
@@ -199,21 +206,15 @@ with col_der:
             marker=dict(size=4)
         ))
         
-        # Configurar ejes y fondo
+        # 3. Configurar ejes y diseño
         fig.update_layout(
             title={'text': "Histórico Delta T (Últimas 48hs)", 'x': 0.5},
             yaxis=dict(title="Delta T (°C)", range=[0, 15]),
             xaxis=dict(title="Fecha/Hora", tickformat="%d/%m\n%H:%M"),
-            height=400, # Altura fija que se ve bien en móvil
+            height=400, # Altura adecuada para móvil
             margin=dict(l=20, r=20, t=40, b=20),
             hovermode="x unified"
         )
-        
-        # Añadir áreas de color de fondo (Rocío, Óptimo, etc.)
-        fig.add_hrect(y0=0, y1=2, fillcolor="#F1F8E9", opacity=0.5, line_width=0, layer="below")
-        fig.add_hrect(y0=2, y1=8, fillcolor="#2E7D32", opacity=0.3, line_width=0, layer="below")
-        fig.add_hrect(y0=8, y1=9.5, fillcolor="#FFF9C4", opacity=0.5, line_width=0, layer="below")
-        fig.add_hrect(y0=9.5, y1=15, fillcolor="#D32F2F", opacity=0.3, line_width=0, layer="below")
         
         st.plotly_chart(fig, use_container_width=True)
     else:
