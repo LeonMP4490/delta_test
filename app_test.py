@@ -9,7 +9,7 @@ from scipy.ndimage import gaussian_filter
 from scipy.interpolate import interp1d
 import requests
 from fpdf import FPDF
-import plotly.graph_objects as go
+import plotly.graph_objects as go  # Asegurate de tener plotly en requirements.txt
 
 # 1. CONFIGURACIÓN E ICONO
 URL_ICONO = "ICONO_2.png" 
@@ -26,6 +26,7 @@ st.markdown(f"""
     .main {{ background-color: #ffffff; }}
     .block-container {{ padding-top: 1rem; padding-bottom: 0rem; }}
     
+    /* Baja el icono y evita que se corte */
     [data-testid="stImage"] {{ 
         display: flex; 
         justify-content: center; 
@@ -123,66 +124,35 @@ with col_izq:
                 <small>Actualizado: {hora_estacion} hs</small>
                 </div>""", unsafe_allow_html=True)
 
-    # --- VELOCÍMETRO TÉCNICO (Aguja Central Pivote) ---
-    # Rango total 0-15
-    max_val = 15
+    # --- VELOCÍMETRO ESTÁNDAR (Aguja Gruesa) ---
+    fig_gauge = go.Figure(go.Indicator(
+        mode = "gauge+number",
+        value = ie_act,
+        domain = {'x': [0, 1], 'y': [0, 1]},
+        title = {'text': "Delta T (°C)", 'font': {'size': 16}},
+        gauge = {
+            'axis': {'range': [0, 15], 'tickwidth': 1, 'tickcolor': "black"},
+            'bar': {'color': "rgba(0,0,0,0)"},
+            'bgcolor': "white",
+            'borderwidth': 2,
+            'bordercolor': "gray",
+            'steps': [
+                {'range': [0, 2], 'color': "#F1F8E9"}, # Rocío
+                {'range': [2, 8], 'color': "#2E7D32"}, # Óptimo
+                {'range': [8, 9.5], 'color': "#FFF9C4"}, # Precaución
+                {'range': [9.5, 15], 'color': "#D32F2F"} # Alta evap
+            ],
+            # --- AGUJA ---
+            'threshold': {
+                'line': {'color': "black", 'width': 6}, # MÁS GRUESA
+                'thickness': 0.8,
+                'value': ie_act
+            }
+        }))
     
-    # Definición de colores
-    # Rocío: 0-2, Óptimo: 2-8, Precaución: 8-9.5, Alta: 9.5-15
-    
-    # Crear el gráfico pie
-    fig = go.Figure()
-
-    # Añadir los segmentos de color
-    fig.add_trace(go.Pie(
-        values=[2, 6, 1.5, 5.5], # Tamaños de cada sector (suman 15)
-        labels=["Rocío", "Óptimo", "Precaución", "Alta"],
-        marker=dict(colors=["#F1F8E9", "#2E7D32", "#FFF9C4", "#D32F2F"]),
-        hole=0.4,
-        direction="clockwise",
-        sort=False,
-        rotation=108, # Rotación para empezar en 0 grados
-        showlegend=False,
-        hoverinfo="label"
-    ))
-
-    # Calcular ángulo de la aguja (180 grados total = 15 unidades)
-    angulo = 180 - (ie_act / max_val * 180)
-    
-    # Asegurar límites del ángulo
-    angulo = max(0, min(180, angulo))
-    
-    # Dibujar la aguja
-    fig.add_annotation(
-        ax=0, ay=0,
-        x=0.5 * np.cos(np.radians(angulo)),
-        y=0.5 * np.sin(np.radians(angulo)),
-        xref="paper", yref="paper",
-        showarrow=True,
-        arrowhead=2,
-        arrowsize=1,
-        arrowwidth=4,
-        arrowcolor="black"
-    )
-    
-    # Punto central
-    fig.add_trace(go.Scatter(
-        x=[0], y=[0],
-        mode="markers",
-        marker=dict(size=15, color="black"),
-        showlegend=False
-    ))
-
-    # Ajustes finales del layout
-    fig.update_layout(
-        height=250,
-        margin=dict(l=10, r=10, t=10, b=10),
-        xaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
-        yaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
-        plot_bgcolor='white'
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
+    # Ajuste de tamaño
+    fig_gauge.update_layout(height=250, margin=dict(l=20, r=20, t=30, b=10))
+    st.plotly_chart(fig_gauge, use_container_width=True)
 
     # --- BOTONES DE CONTROL DE APLICACIÓN ---
     st.markdown("---")
