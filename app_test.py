@@ -11,8 +11,8 @@ import requests
 from fpdf import FPDF
 
 # 1. CONFIGURACIÓN E ICONO
-# Cambiado a icono de estación meteorológica
-URL_ICONO = "https://cdn-icons-png.flaticon.com/512/869/869151.png"
+# CORRECCIÓN: Nombre del archivo de imagen
+URL_ICONO = "ICONO_2.png" 
 
 st.set_page_config(
     page_title="Monitor León MP 4490", 
@@ -100,7 +100,10 @@ def cargar_datos():
 v_act, ie_act, dir_txt, hora_estacion, df_h = cargar_datos()
 
 # --- 4. INTERFAZ VISUAL ---
-st.image(URL_ICONO, width=60)
+try:
+    st.image(URL_ICONO, width=100)
+except:
+    st.write("📡")
 
 st.markdown(f"<h3 style='text-align: center; color: #1A237E; margin-bottom: 0px;'>Monitor Bouquet</h3>", unsafe_allow_html=True)
 st.markdown(f"<p style='text-align: center; color: #555; font-weight: bold; margin-top: 0px;'>Ing. Agr. León - MP 4490</p>", unsafe_allow_html=True)
@@ -187,6 +190,7 @@ st.caption(f"Estación Cooperativa de Bouquet | {(datetime.now() - timedelta(hou
 
 # --- 5. GENERACIÓN DE PDF Y RESUMEN ---
 st.markdown("---")
+# ESTRUCTURA CORREGIDA: Se asegura que el contenedor principal esté al final
 if not st.session_state.aplicando and st.session_state.inicio_app:
     st.success("✅ Aplicación finalizada. Generando reporte...")
     
@@ -271,4 +275,5 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
         st.session_state.inicio_app = None
         st.session_state.datos_registro = []
         st.rerun()
+
 
