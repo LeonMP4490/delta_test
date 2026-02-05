@@ -76,8 +76,9 @@ def cargar_datos():
             v_act = data.get(ID_VIENTO, 0)
             dir_txt = grados_a_direccion(data.get(ID_DIR, 0))
             ie_act = calcular_ie(t, hum)
+            
+            # --- CORRECCIÓN HORA: Ajuste de 3 horas ---
             fecha_raw = data.get("date", "")
-            # CORRECCIÓN HORA: Ajuste de 3 horas
             if "T" in fecha_raw: 
                 fecha_dt = datetime.strptime(fecha_raw, '%Y-%m-%dT%H:%M:%S.%fZ')
                 fecha_local = fecha_dt - timedelta(hours=3)
@@ -134,14 +135,11 @@ with col_izq:
         if st.button("🔴 Iniciar Aplicación", use_container_width=True):
             st.session_state.aplicando = True
             st.session_state.datos_registro = [] 
-            # CORRECCIÓN HORA: Usar hora local ajustada para inicio
             st.session_state.inicio_app = datetime.now() - timedelta(hours=3)
-            st.session_state.ultimo_registro = datetime.now() - timedelta(minutes=11) # Permitir registro inmediato
+            st.session_state.ultimo_registro = datetime.now() - timedelta(minutes=11)
             st.rerun()
     else:
-        # CORRECCIÓN HORA: Mostrar hora ajustada
-        hora_formateada = st.session_state.inicio_app.strftime('%H:%M:%S')
-        st.warning(f"⚠️ Aplicación en curso... Iniciada: {hora_formateada}")
+        st.warning(f"⚠️ Aplicación en curso... Iniciada: {st.session_state.inicio_app.strftime('%H:%M:%S')}")
         
         # --- Lógica de registro cada 10 min ---
         ahora = datetime.now()
@@ -188,7 +186,7 @@ with col_der:
 st.markdown("<p style='font-size: 12px; text-align: center; font-weight: bold;'>⬜ Rocío | 🟩 Óptimo | 🟨 Precaución | 🟥 Alta Evap | 🟪Viento Prohibido</p>", unsafe_allow_html=True)
 st.caption(f"Estación Cooperativa de Bouquet | {(datetime.now() - timedelta(hours=3)).strftime('%d/%m %H:%M')}")
 
-# --- 5. GENERACIÓN DE PDF ---
+# --- 5. GENERACIÓN DE PDF Y RESUMEN ---
 if not st.session_state.aplicando and st.session_state.inicio_app:
     st.success("✅ Aplicación finalizada. Generando reporte...")
     
@@ -196,7 +194,14 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
     
     if not df.empty:
         st.subheader("Resumen de Registros de la Aplicación")
-        st.dataframe(df)
+        
+        # --- Formatear decimales para visualización ---
+        df_display = df.copy()
+        df_display['DT'] = df_display['DT'].map('{:,.2f}'.format)
+        df_display['Viento'] = df_display['Viento'].map('{:,.2f}'.format)
+        
+        # --- Mostrar tabla ---
+        st.dataframe(df_display, use_container_width=True)
         
         # --- CÁLCULOS DETALLADOS ---
         min_dt = df['DT'].min()
@@ -205,7 +210,7 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
         mean_viento = df['Viento'].mean()
         dir_predominante = df['Direccion'].mode()[0] if not df['Direccion'].mode().empty else "N/A"
         
-        # Mostrar en pantalla
+        # Métricas
         col_res1, col_res2, col_res3 = st.columns(3)
         col_res1.metric("Delta T Promedio", f"{mean_dt:.1f} °C")
         col_res2.metric("Delta T Min/Max", f"{min_dt:.1f} / {max_dt:.1f} °C")
@@ -237,7 +242,7 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
         pdf.cell(200, 10, txt=f"- Viento: Prom {mean_viento:.1f} km/h - Predom: {dir_predominante}", ln=1)
         pdf.ln(10)
         
-        # Tabla de datos
+        # Tabla de datos en PDF
         pdf.set_font("Arial", 'B', 10)
         pdf.cell(40, 10, "Hora", 1)
         pdf.cell(40, 10, "Delta T (°C)", 1)
