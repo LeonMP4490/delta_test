@@ -124,15 +124,15 @@ with col_izq:
                 <small>Actualizado: {hora_estacion} hs</small>
                 </div>""", unsafe_allow_html=True)
 
-    # --- VELOCÍMETRO TRADICIONAL CON AGUJA ---
+    # --- VELOCÍMETRO TRADICIONAL (Solo Aguja) ---
     fig_gauge = go.Figure(go.Indicator(
-        mode = "gauge+number",
+        mode = "gauge", # QUITAMOS "number"
         value = ie_act,
         domain = {'x': [0, 1], 'y': [0, 1]},
         title = {'text': "Delta T (°C)", 'font': {'size': 16}},
         gauge = {
             'axis': {'range': [0, 15], 'tickwidth': 1, 'tickcolor': "black"},
-            'bar': {'color': "rgba(0,0,0,0)"}, # Aguja invisible en la barra
+            'bar': {'color': "rgba(0,0,0,0)"},
             'bgcolor': "white",
             'borderwidth': 2,
             'bordercolor': "gray",
@@ -143,13 +143,13 @@ with col_izq:
                 {'range': [9.5, 15], 'color': "#D32F2F"} # Alta evap
             ],
             'threshold': {
-                'line': {'color': "black", 'width': 4}, # AGUJA (Threshold)
+                'line': {'color': "black", 'width': 4}, # AGUJA
                 'thickness': 0.75,
                 'value': ie_act
             }
         }))
     
-    # Ajuste de tamaño para celular
+    # Ajuste de tamaño
     fig_gauge.update_layout(height=250, margin=dict(l=20, r=20, t=30, b=10))
     st.plotly_chart(fig_gauge, use_container_width=True)
 
