@@ -124,35 +124,63 @@ with col_izq:
                 <small>Actualizado: {hora_estacion} hs</small>
                 </div>""", unsafe_allow_html=True)
 
-    # --- VELOCÍMETRO ESTÁNDAR (Aguja Gruesa) ---
-    fig_gauge = go.Figure(go.Indicator(
-        mode = "gauge+number",
-        value = ie_act,
-        domain = {'x': [0, 1], 'y': [0, 1]},
-        title = {'text': "Delta T (°C)", 'font': {'size': 16}},
-        gauge = {
-            'axis': {'range': [0, 15], 'tickwidth': 1, 'tickcolor': "black"},
-            'bar': {'color': "rgba(0,0,0,0)"},
-            'bgcolor': "white",
-            'borderwidth': 2,
-            'bordercolor': "gray",
-            'steps': [
-                {'range': [0, 2], 'color': "#F1F8E9"}, # Rocío
-                {'range': [2, 8], 'color': "#2E7D32"}, # Óptimo
-                {'range': [8, 9.5], 'color': "#FFF9C4"}, # Precaución
-                {'range': [9.5, 15], 'color': "#D32F2F"} # Alta evap
-            ],
-            # --- AGUJA ---
-            'threshold': {
-                'line': {'color': "black", 'width': 6}, # MÁS GRUESA
-                'thickness': 0.8,
-                'value': ie_act
-            }
-        }))
+    # --- VELOCÍMETRO TÉCNICO (Aguja Central Pivote) ---
     
-    # Ajuste de tamaño
-    fig_gauge.update_layout(height=250, margin=dict(l=20, r=20, t=30, b=10))
-    st.plotly_chart(fig_gauge, use_container_width=True)
+    # 1. Crear el fondo del reloj (Semicírculo de colores)
+    fig = go.Figure()
+    
+    # Añadir los segmentos de color (total 15 unidades)
+    # Rango: 0-2 (Rocío), 2-8 (Óptimo), 8-9.5 (Precaución), 9.5-15 (Alta)
+    fig.add_trace(go.Pie(
+        values=[2, 6, 1.5, 5.5], 
+        labels=["Rocío", "Óptimo", "Precaución", "Alta"],
+        marker=dict(colors=["#F1F8E9", "#2E7D32", "#FFF9C4", "#D32F2F"]),
+        hole=0.6, # Tamaño del agujero central
+        direction="clockwise",
+        sort=False,
+        rotation=90, # 90 grados para que inicie horizontalmente
+        showlegend=False,
+        hoverinfo="label"
+    ))
+
+    # 2. Calcular ángulo de la aguja 
+    # El eje central es el origen (0,0)
+    # mapear el valor 0-15 a un ángulo de 180 grados
+    angulo = 180 - (ie_act / 15 * 180)
+    
+    # 3. Dibujar la aguja usando una anotación (flecha)
+    fig.add_annotation(
+        ax=0, ay=0,  # Origen en el centro
+        x=0.5 * np.cos(np.radians(angulo)),
+        y=0.5 * np.sin(np.radians(angulo)),
+        xref="paper", yref="paper",
+        showarrow=True,
+        arrowhead=2,
+        arrowsize=1,
+        arrowwidth=4,
+        arrowcolor="black"
+    )
+    
+    # 4. Punto central del pivote
+    fig.add_trace(go.Scatter(
+        x=[0], y=[0],
+        mode="markers",
+        marker=dict(size=20, color="black"),
+        showlegend=False,
+        hoverinfo="skip"
+    ))
+
+    # Ajustes finales del layout para que parezca un reloj
+    fig.update_layout(
+        height=250,
+        margin=dict(l=10, r=10, t=10, b=10),
+        xaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
+        yaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
+        plot_bgcolor='white',
+        paper_bgcolor='white'
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
 
     # --- BOTONES DE CONTROL DE APLICACIÓN ---
     st.markdown("---")
@@ -297,6 +325,7 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
         st.session_state.inicio_app = None
         st.session_state.datos_registro = []
         st.rerun()
+
 
 
 
