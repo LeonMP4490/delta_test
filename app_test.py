@@ -19,7 +19,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS MEJORADO PARA CENTRADO ---
+# --- CSS MEJORADO PARA ICONO ---
 st.markdown(f"""
     <style>
     .main {{ background-color: #ffffff; }}
@@ -35,12 +35,6 @@ st.markdown(f"""
     [data-testid="stImage"] img {{
         max-height: 100px;
         width: auto;
-    }}
-    
-    /* Centra el gráfico dentro de su contenedor en celular */
-    [data-testid="stPlotlyChart"] {{
-        display: flex;
-        justify-content: center;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -129,23 +123,20 @@ with col_izq:
                 <small>Actualizado: {hora_estacion} hs</small>
                 </div>""", unsafe_allow_html=True)
 
-    # --- RELOJ GRÁFICO CORREGIDO (Centrado y Grande) ---
-    # Tamaño aumentado a 4x4
+    # --- RELOJ GRÁFICO CORREGIDO (Relación de aspecto 1:1) ---
     fig_g, ax_g = plt.subplots(figsize=(4, 4), subplot_kw={'projection': 'polar'})
     
-    # Forzar relación de aspecto 1:1
+    # FORZAR A QUE SEA CÍRCULO PERFECTO
     ax_g.set_aspect('equal', adjustable='box')
     
     ax_g.bar(np.linspace(np.pi, 0, 5, endpoint=False), [1]*5, width=-np.pi/5, color=["#F1F8E9", "#2E7D32", "#FFF9C4", "#D32F2F", "#B39DDB"], align='edge', alpha=0.9)
     
-    # Calcular ángulo de la aguja
     ang = 18 if (v_act<2 or v_act>15) else (54 if ie_act>=9.5 else (90 if (ie_act>=8 or v_act>=11) else (162 if ie_act<2 else 126)))
     
     ax_g.annotate('', xy=(np.radians(ang), 1.0), xytext=(0, 0), arrowprops=dict(facecolor='black', width=3, headwidth=8))
     ax_g.set_axis_off()
     
-    # Mostrar usando el ancho del contenedor para centrar
-    st.pyplot(fig_g, use_container_width=True)
+    st.pyplot(fig_g) # Ya no forzamos use_container_width=True para proteger la forma
 
     # --- BOTONES DE CONTROL DE APLICACIÓN ---
     st.markdown("---")
@@ -290,10 +281,4 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
         st.session_state.inicio_app = None
         st.session_state.datos_registro = []
         st.rerun()
-
-
-
-
-
-
 
