@@ -19,7 +19,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS MEJORADO PARA ICONO ---
+# --- CSS MEJORADO PARA CENTRADO ---
 st.markdown(f"""
     <style>
     .main {{ background-color: #ffffff; }}
@@ -35,6 +35,12 @@ st.markdown(f"""
     [data-testid="stImage"] img {{
         max-height: 100px;
         width: auto;
+    }}
+    
+    /* Centra el gráfico dentro de su contenedor en celular */
+    [data-testid="stPlotlyChart"] {{
+        display: flex;
+        justify-content: center;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -123,8 +129,9 @@ with col_izq:
                 <small>Actualizado: {hora_estacion} hs</small>
                 </div>""", unsafe_allow_html=True)
 
-    # --- RELOJ GRÁFICO CORREGIDO (Circular) ---
-    fig_g, ax_g = plt.subplots(figsize=(2, 2), subplot_kw={'projection': 'polar'})
+    # --- RELOJ GRÁFICO CORREGIDO (Centrado y Grande) ---
+    # Tamaño aumentado a 4x4
+    fig_g, ax_g = plt.subplots(figsize=(4, 4), subplot_kw={'projection': 'polar'})
     
     # Forzar relación de aspecto 1:1
     ax_g.set_aspect('equal', adjustable='box')
@@ -137,8 +144,8 @@ with col_izq:
     ax_g.annotate('', xy=(np.radians(ang), 1.0), xytext=(0, 0), arrowprops=dict(facecolor='black', width=3, headwidth=8))
     ax_g.set_axis_off()
     
-    # Mostrar con un ancho que ayude al celular
-    st.pyplot(fig_g, use_container_width=False) # False para respetar el figsize
+    # Mostrar usando el ancho del contenedor para centrar
+    st.pyplot(fig_g, use_container_width=True)
 
     # --- BOTONES DE CONTROL DE APLICACIÓN ---
     st.markdown("---")
@@ -283,10 +290,6 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
         st.session_state.inicio_app = None
         st.session_state.datos_registro = []
         st.rerun()
-
-
-
-
 
 
 
