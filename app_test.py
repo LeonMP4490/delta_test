@@ -1,11 +1,15 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 from datetime import timedelta, datetime
+from matplotlib.colors import LinearSegmentedColormap
+from scipy.ndimage import gaussian_filter
+from scipy.interpolate import interp1d
 import requests
 from fpdf import FPDF
-from scipy.interpolate import interp1d
+import plotly.graph_objects as go
 
 # 1. CONFIGURACIÓN E ICONO
 URL_ICONO = "ICONO_2.png" 
@@ -179,46 +183,41 @@ with col_izq:
             st.rerun()
 
 with col_der:
-    # --- GRÁFICO HISTÓRICO PLOTLY CON FONDOS DE RIESGO ---
+    # --- GRÁFICO HISTÓRICO MATPLOTLIB (Alta resolución forzada) ---
+    fig, ax = plt.subplots(figsize=(10, 7)) # Proporción adecuada
+    cmap_om = LinearSegmentedColormap.from_list("om", ["#F1F8E9", "#2E7D32", "#FFF9C4", "#D32F2F", "#B39DDB"])
     if not df_h.empty:
-        fig = go.Figure()
+        xn = mdates.date2num(df_h['Fecha'])
+        xd = np.linspace(xn.min(), xn.max(), 300)
+        fv = interp1d(xn, df_h['Viento'], kind='linear', fill_value="extrapolate")
+        vi = fv(xd)
+        X, Y = np.meshgrid(xd, np.linspace(0, 13, 100))
+        Z = np.zeros_like(X)
+        for i in range(len(xd)):
+            techo = 5 if vi[i] >= 11 else 8
+            for j, vy in enumerate(np.linspace(0, 13, 100)):
+                if vi[i] < 2 or vi[i] > 15: Z[j, i] = 1.0 
+                elif vy < 2: Z[j, i] = 0.05 
+                elif vy < techo: Z[j, i] = 0.35 
+                elif vy < 9.5: Z[j, i] = 0.65 
+                else: Z[j, i] = 0.85 
+        ax.pcolormesh(X, Y, gaussian_filter(Z, sigma=(1, 4)), cmap=cmap_om, shading='gouraud', alpha=0.6)
+        ax.plot(df_h['Fecha'], df_h['IE'], color='black', lw=2, marker='o', markersize=3)
+        ax.set_ylim(0, 13)
         
-        # 1. Definir áreas de riesgo coloreadas (HRECT)
-        # Fondo Prohibido Viento (Purple overlay)
-        fig.add_hrect(y0=0, y1=15, fillcolor="#B39DDB", opacity=0.2, line_width=0, layer="below", name="Prohibido Viento")
+        # --- EJE X ---
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%d/%m\n%H:%M'))
+        ax.xaxis.set_major_locator(mdates.HourLocator(interval=6))
         
-        # Fondo Rocío
-        fig.add_hrect(y0=0, y1=2, fillcolor="#F1F8E9", opacity=0.8, line_width=0, layer="below")
-        # Fondo Óptimo
-        fig.add_hrect(y0=2, y1=8, fillcolor="#2E7D32", opacity=0.4, line_width=0, layer="below")
-        # Fondo Precaución
-        fig.add_hrect(y0=8, y1=9.5, fillcolor="#FFF9C4", opacity=0.6, line_width=0, layer="below")
-        # Fondo Peligro
-        fig.add_hrect(y0=9.5, y1=15, fillcolor="#D32F2F", opacity=0.4, line_width=0, layer="below")
-
-        # 2. Añadir la línea de Delta T
-        fig.add_trace(go.Scatter(
-            x=df_h['Fecha'], 
-            y=df_h['IE'],
-            mode='lines+markers',
-            name='Delta T',
-            line=dict(color='black', width=2),
-            marker=dict(size=4)
-        ))
+        ax.tick_params(axis='both', labelsize=10) 
+        ax.set_ylabel("Delta T (°C)", fontsize=12, fontweight='bold')
+        ax.grid(True, alpha=0.3)
         
-        # 3. Configurar ejes y diseño
-        fig.update_layout(
-            title={'text': "Histórico Delta T (Últimas 48hs)", 'x': 0.5},
-            yaxis=dict(title="Delta T (°C)", range=[0, 15]),
-            xaxis=dict(title="Fecha/Hora", tickformat="%d/%m\n%H:%M"),
-            height=400, # Altura adecuada para móvil
-            margin=dict(l=20, r=20, t=40, b=20),
-            hovermode="x unified"
-        )
+        # --- MÁRGENES ESTRECHOS ---
+        plt.subplots_adjust(left=0.08, right=0.98, top=0.95, bottom=0.15)
         
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("Cargando datos históricos...")
+    # USAR DPI ALTO PARA NITIDEZ
+    st.pyplot(fig, use_container_width=True, dpi=300)
 
 st.markdown("<p style='font-size: 11px; text-align: center; font-weight: bold;'>⬜ Rocío | 🟩 Óptimo | 🟨 Precaución | 🟥 Alta Evap | 🟪Viento Prohibido</p>", unsafe_allow_html=True)
 st.caption(f"Estación Cooperativa de Bouquet | {(datetime.now() - timedelta(hours=3)).strftime('%d/%m %H:%M')}")
@@ -246,5 +245,6 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
     else: st.warning("No se registraron datos suficientes (la aplicación fue muy corta).")
     if st.button("Nueva Aplicación"):
         st.session_state.inicio_app = None; st.session_state.datos_registro = []; st.rerun()
+
 
 
