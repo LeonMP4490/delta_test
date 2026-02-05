@@ -19,7 +19,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS MEJORADO PARA ICONO Y RELOJ ---
+# --- CSS MEJORADO PARA ICONO ---
 st.markdown(f"""
     <style>
     .main {{ background-color: #ffffff; }}
@@ -29,17 +29,12 @@ st.markdown(f"""
     [data-testid="stImage"] {{ 
         display: flex; 
         justify-content: center; 
-        margin-top: 30px; /* <--- Aumentado para bajarlo más */
+        margin-top: 20px;
         margin-bottom: 10px;
     }}
     [data-testid="stImage"] img {{
-        max-height: 120px; /* <--- Tamaño ajustado */
+        max-height: 100px;
         width: auto;
-    }}
-    
-    /* Asegura que el contenedor del reloj no se aplaste */
-    [data-testid="stExpander"] {{
-        width: 100%;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -122,21 +117,28 @@ with col_izq:
     elif ie_act < 2: color, rec = "#F1F8E9", "ROCÍO / MOJADO"
     else: color, rec = "#2E7D32", "ÓPTIMO"
 
-    # --- REVISIÓN: Asegurando que se muestre {hora_estacion} ---
     st.markdown(f"""<div style="background-color:{color}; padding:10px; border-radius:10px; text-align:center; color:black; border: 2px solid #333;">
                 <h3 style="margin:0; font-size:18px;">{rec}</h3>
                 <p style="margin:5px 0; font-size:15px;">Viento: <b>{v_act:.1f} km/h ({dir_txt})</b><br>Delta T: <b>{ie_act:.1f}°C</b></p>
                 <small>Actualizado: {hora_estacion} hs</small>
                 </div>""", unsafe_allow_html=True)
 
-    # --- RELOJ GRÁFICO ---
-    # Se ajusta el figsize para que Matplotlib lo renderice mejor en celular
-    fig_g, ax_g = plt.subplots(figsize=(3, 2), subplot_kw={'projection': 'polar'})
+    # --- RELOJ GRÁFICO CORREGIDO (Circular) ---
+    fig_g, ax_g = plt.subplots(figsize=(2, 2), subplot_kw={'projection': 'polar'})
+    
+    # Forzar relación de aspecto 1:1
+    ax_g.set_aspect('equal', adjustable='box')
+    
     ax_g.bar(np.linspace(np.pi, 0, 5, endpoint=False), [1]*5, width=-np.pi/5, color=["#F1F8E9", "#2E7D32", "#FFF9C4", "#D32F2F", "#B39DDB"], align='edge', alpha=0.9)
+    
+    # Calcular ángulo de la aguja
     ang = 18 if (v_act<2 or v_act>15) else (54 if ie_act>=9.5 else (90 if (ie_act>=8 or v_act>=11) else (162 if ie_act<2 else 126)))
+    
     ax_g.annotate('', xy=(np.radians(ang), 1.0), xytext=(0, 0), arrowprops=dict(facecolor='black', width=3, headwidth=8))
     ax_g.set_axis_off()
-    st.pyplot(fig_g, use_container_width=True)
+    
+    # Mostrar con un ancho que ayude al celular
+    st.pyplot(fig_g, use_container_width=False) # False para respetar el figsize
 
     # --- BOTONES DE CONTROL DE APLICACIÓN ---
     st.markdown("---")
@@ -281,7 +283,6 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
         st.session_state.inicio_app = None
         st.session_state.datos_registro = []
         st.rerun()
-
 
 
 
