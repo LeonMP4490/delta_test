@@ -19,22 +19,27 @@ st.set_page_config(
     layout="wide"
 )
 
-# CSS CORREGIDO: Ajustes específicos para no aplastar el reloj
+# --- CSS MEJORADO PARA ICONO Y RELOJ ---
 st.markdown(f"""
     <style>
     .main {{ background-color: #ffffff; }}
     .block-container {{ padding-top: 1rem; padding-bottom: 0rem; }}
     
-    /* CORRECCIÓN: Estilos específicos para la imagen de cabecera */
+    /* Baja el icono y evita que se corte */
     [data-testid="stImage"] {{ 
         display: flex; 
         justify-content: center; 
-        margin-top: 5px; 
+        margin-top: 30px; /* <--- Aumentado para bajarlo más */
         margin-bottom: 10px;
     }}
     [data-testid="stImage"] img {{
-        max-height: 100px;
+        max-height: 120px; /* <--- Tamaño ajustado */
         width: auto;
+    }}
+    
+    /* Asegura que el contenedor del reloj no se aplaste */
+    [data-testid="stExpander"] {{
+        width: 100%;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -124,8 +129,9 @@ with col_izq:
                 <small>Actualizado: {hora_estacion} hs</small>
                 </div>""", unsafe_allow_html=True)
 
-    # --- RELOJ GRÁFICO (Revisado para no aplastarse) ---
-    fig_g, ax_g = plt.subplots(figsize=(1.5, 1.2), subplot_kw={'projection': 'polar'})
+    # --- RELOJ GRÁFICO ---
+    # Se ajusta el figsize para que Matplotlib lo renderice mejor en celular
+    fig_g, ax_g = plt.subplots(figsize=(3, 2), subplot_kw={'projection': 'polar'})
     ax_g.bar(np.linspace(np.pi, 0, 5, endpoint=False), [1]*5, width=-np.pi/5, color=["#F1F8E9", "#2E7D32", "#FFF9C4", "#D32F2F", "#B39DDB"], align='edge', alpha=0.9)
     ang = 18 if (v_act<2 or v_act>15) else (54 if ie_act>=9.5 else (90 if (ie_act>=8 or v_act>=11) else (162 if ie_act<2 else 126)))
     ax_g.annotate('', xy=(np.radians(ang), 1.0), xytext=(0, 0), arrowprops=dict(facecolor='black', width=3, headwidth=8))
@@ -275,7 +281,6 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
         st.session_state.inicio_app = None
         st.session_state.datos_registro = []
         st.rerun()
-
 
 
 
