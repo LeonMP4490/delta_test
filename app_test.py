@@ -9,7 +9,7 @@ from scipy.ndimage import gaussian_filter
 from scipy.interpolate import interp1d
 import requests
 from fpdf import FPDF
-import plotly.graph_objects as go  # Asegurate de tener plotly en requirements.txt
+import plotly.graph_objects as go
 
 # 1. CONFIGURACIÓN E ICONO
 URL_ICONO = "ICONO_2.png" 
@@ -26,7 +26,6 @@ st.markdown(f"""
     .main {{ background-color: #ffffff; }}
     .block-container {{ padding-top: 1rem; padding-bottom: 0rem; }}
     
-    /* Baja el icono y evita que se corte */
     [data-testid="stImage"] {{ 
         display: flex; 
         justify-content: center; 
@@ -118,10 +117,11 @@ with col_izq:
     elif ie_act < 2: color, rec = "#F1F8E9", "ROCÍO / MOJADO"
     else: color, rec = "#2E7D32", "ÓPTIMO"
 
-    st.markdown(f"""<div style="background-color:{color}; padding:10px; border-radius:10px; text-align:center; color:black; border: 2px solid #333;">
-                <h3 style="margin:0; font-size:18px;">{rec}</h3>
-                <p style="margin:5px 0; font-size:15px;">Viento: <b>{v_act:.1f} km/h ({dir_txt})</b><br>Delta T: <b>{ie_act:.1f}°C</b></p>
-                <small>Actualizado: {hora_estacion} hs</small>
+    # --- CARTEL DE RECOMENDACIÓN CON HORA CORREGIDA ---
+    st.markdown(f"""<div style="background-color:{color}; padding:15px; border-radius:10px; text-align:center; color:black; border: 2px solid #333;">
+                <h3 style="margin:0; font-size:20px;">{rec}</h3>
+                <p style="margin:8px 0; font-size:16px;">Viento: <b>{v_act:.1f} km/h ({dir_txt})</b><br>Delta T: <b>{ie_act:.1f}°C</b></p>
+                <p style="margin:0; font-size:13px; font-weight:bold;">Actualizado: {hora_estacion} hs</p>
                 </div>""", unsafe_allow_html=True)
 
     # --- VELOCÍMETRO ESTÁNDAR (Aguja Gruesa) ---
