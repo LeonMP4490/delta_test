@@ -287,3 +287,4 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
 
 
 
+
