@@ -97,8 +97,11 @@ def cargar_datos():
         df_h.columns = ['Fecha', 'Temperatura', 'Humedad', 'Viento'] + list(df_h.columns[4:])
         df_h['Fecha'] = pd.to_datetime(df_h['Fecha'], dayfirst=True, errors='coerce')
         df_h = df_h.dropna(subset=['Fecha']).sort_values('Fecha')
-        referencia = df_h['Fecha'].max() if not df_h.empty else datetime.now()
-        df_h = df_h[df_h['Fecha'] >= (referencia - timedelta(days=1.5))]
+        
+        # --- FILTRO 48 HS ---
+        referencia = datetime.now()
+        df_h = df_h[df_h['Fecha'] >= (referencia - timedelta(hours=48))]
+        
         df_h['IE'] = df_h.apply(lambda x: calcular_ie(x['Temperatura'], x['Humedad']), axis=1)
     except: df_h = pd.DataFrame()
     return v_act, ie_act, dir_txt, hora_estacion, df_h
@@ -181,8 +184,8 @@ with col_izq:
             st.rerun()
 
 with col_der:
-    # --- GRÁFICO HISTÓRICO AMPLIADO ---
-    fig, ax = plt.subplots(figsize=(10, 6.5)) # ALTURA AUMENTADA A 6.5
+    # --- GRÁFICO HISTÓRICO CON MÁS ALTURA Y EJE X ---
+    fig, ax = plt.subplots(figsize=(10, 8)) # ALTURA AUMENTADA A 8
     cmap_om = LinearSegmentedColormap.from_list("om", ["#F1F8E9", "#2E7D32", "#FFF9C4", "#D32F2F", "#B39DDB"])
     if not df_h.empty:
         xn = mdates.date2num(df_h['Fecha'])
@@ -202,11 +205,16 @@ with col_der:
         ax.pcolormesh(X, Y, gaussian_filter(Z, sigma=(1, 4)), cmap=cmap_om, shading='gouraud', alpha=0.6)
         ax.plot(df_h['Fecha'], df_h['IE'], color='black', lw=2.5, marker='o', markersize=4)
         ax.set_ylim(0, 13)
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%d/%m %H:%M'))
-        ax.tick_params(axis='both', labelsize=12) 
+        
+        # --- EJE X MEJORADO ---
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%d/%m\n%H:%M'))
+        ax.xaxis.set_major_locator(mdates.HourLocator(interval=6)) # Marca cada 6 horas
+        
+        ax.tick_params(axis='both', labelsize=10) 
         ax.set_ylabel("Delta T (°C)", fontsize=13, fontweight='bold')
-        ax.grid(True, alpha=0.2)
-        plt.xticks(rotation=20, fontweight='bold')
+        ax.grid(True, alpha=0.3)
+        plt.xticks(rotation=0) # Evita rotación para leer mejor
+        
     st.pyplot(fig, use_container_width=True)
 
 st.markdown("<p style='font-size: 12px; text-align: center; font-weight: bold;'>⬜ Rocío | 🟩 Óptimo | 🟨 Precaución | 🟥 Alta Evap | 🟪Viento Prohibido</p>", unsafe_allow_html=True)
@@ -235,4 +243,5 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
     else: st.warning("No se registraron datos suficientes (la aplicación fue muy corta).")
     if st.button("Nueva Aplicación"):
         st.session_state.inicio_app = None; st.session_state.datos_registro = []; st.rerun()
+
 
