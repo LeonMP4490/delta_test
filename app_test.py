@@ -137,18 +137,17 @@ with col_izq:
                 <p style="margin:0; font-size:12px; font-weight:bold;">Actualizado: {hora_estacion} hs</p>
                 </div>""", unsafe_allow_html=True)
 
-    # --- VELOCÍMETRO PLOTLY (Fuentes reducidas) ---
+    # --- VELOCÍMETRO PLOTLY (Original) ---
     fig_gauge = go.Figure(go.Indicator(
         mode = "gauge+number",
         value = ie_act,
         domain = {'x': [0, 1], 'y': [0, 1]},
-        title = {'text': "Delta T (°C)", 'font': {'size': 14}},
-        number = {'font': {'size': 35}}, # Tamaño número central
+        title = {'text': "Delta T (°C)", 'font': {'size': 16}},
         gauge = {
-            'axis': {'range': [0, 15], 'tickwidth': 1, 'tickcolor': "black", 'tickfont': {'size': 10}},
+            'axis': {'range': [0, 15], 'tickwidth': 1, 'tickcolor': "black"},
             'bar': {'color': "rgba(0,0,0,0)"},
             'bgcolor': "white",
-            'borderwidth': 1,
+            'borderwidth': 2,
             'bordercolor': "gray",
             'steps': [
                 {'range': [0, 2], 'color': "#F1F8E9"}, 
@@ -157,13 +156,13 @@ with col_izq:
                 {'range': [9.5, 15], 'color': "#D32F2F"}
             ],
             'threshold': {
-                'line': {'color': "black", 'width': 4}, 
+                'line': {'color': "black", 'width': 6}, 
                 'thickness': 0.8,
                 'value': ie_act
             }
         }))
     
-    fig_gauge.update_layout(height=200, margin=dict(l=10, r=10, t=25, b=5))
+    fig_gauge.update_layout(height=250, margin=dict(l=20, r=20, t=30, b=10))
     st.plotly_chart(fig_gauge, use_container_width=True)
 
     # --- BOTONES DE CONTROL ---
@@ -220,6 +219,9 @@ with col_der:
         ax.tick_params(axis='both', labelsize=10) 
         ax.set_ylabel("Delta T (°C)", fontsize=12, fontweight='bold')
         ax.grid(True, alpha=0.3)
+        
+        # Ajuste estrecho de márgenes para maximizar espacio
+        plt.subplots_adjust(left=0.08, right=0.98, top=0.95, bottom=0.15)
         
     st.pyplot(fig, use_container_width=True)
 
