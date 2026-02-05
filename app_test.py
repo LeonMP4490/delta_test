@@ -20,7 +20,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS MEJORADO PARA ICONO Y RELOJ FIJO ---
+# --- CSS MEJORADO ---
 st.markdown(f"""
     <style>
     .main {{ background-color: #ffffff; }}
@@ -36,13 +36,6 @@ st.markdown(f"""
     [data-testid="stImage"] img {{
         max-height: 100px;
         width: auto;
-    }}
-    
-    /* Centrar imagen de reloj */
-    .reloj-centrado {{
-        display: flex;
-        justify-content: center;
-        margin-bottom: 10px;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -131,26 +124,24 @@ with col_izq:
                 <small>Actualizado: {hora_estacion} hs</small>
                 </div>""", unsafe_allow_html=True)
 
-    # --- RELOJ GRÁFICO NUEVO: Usando una tabla HTML para asegurar forma ---
-    st.markdown("<br>", unsafe_allow_html=True)
+    # --- RELOJ GRÁFICO NUEVO: Forzando cuadrado ---
+    fig_g, ax_g = plt.subplots(figsize=(4, 4), subplot_kw={'projection': 'polar'})
     
-    # Definir colores según estado
-    if v_act < 2 or v_act > 15: color_ag = "#B39DDB"
-    elif ie_act >= 9.5: color_ag = "#D32F2F"
-    elif ie_act >= 8 or v_act >= 11: color_ag = "#FFF9C4"
-    elif ie_act < 2: color_ag = "#F1F8E9"
-    else: color_ag = "#2E7D32"
+    # 1. FORZAR CUADRADO PERFECTO EN MATPLOTLIB
+    ax_g.set_aspect('equal', adjustable='box')
     
-    # Crear un "reloj" basado en CSS/HTML que es más fácil de controlar
-    st.markdown(f"""
-    <div style="display: flex; justify-content: center; align-items: center;">
-        <div style="width: 150px; height: 150px; border-radius: 50%; background-color: {color_ag}; border: 4px solid #333; display: flex; justify-content: center; align-items: center; box-shadow: 2px 2px 5px rgba(0,0,0,0.3);">
-            <div style="font-size: 24px; font-weight: bold; color: black; text-align: center;">{ie_act:.1f}°<br><span style="font-size: 14px;">Delta T</span></div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # Dibujar sectores (colores)
+    ax_g.bar(np.linspace(np.pi, 0, 5, endpoint=False), [1]*5, width=-np.pi/5, color=["#F1F8E9", "#2E7D32", "#FFF9C4", "#D32F2F", "#B39DDB"], align='edge', alpha=0.9)
     
-    st.markdown("<br>", unsafe_allow_html=True)
+    # Calcular ángulo de la aguja
+    ang = 18 if (v_act<2 or v_act>15) else (54 if ie_act>=9.5 else (90 if (ie_act>=8 or v_act>=11) else (162 if ie_act<2 else 126)))
+    
+    # Dibujar aguja
+    ax_g.annotate('', xy=(np.radians(ang), 1.0), xytext=(0, 0), arrowprops=dict(facecolor='black', width=3, headwidth=8))
+    ax_g.set_axis_off()
+    
+    # 2. MOSTRAR SIN ESTIRAR AL ANCHO
+    st.pyplot(fig_g, use_container_width=False) 
 
     # --- BOTONES DE CONTROL DE APLICACIÓN ---
     st.markdown("---")
@@ -295,5 +286,6 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
         st.session_state.inicio_app = None
         st.session_state.datos_registro = []
         st.rerun()
+
 
 
