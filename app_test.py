@@ -137,7 +137,7 @@ with col_izq:
                 <p style="margin:0; font-size:12px; font-weight:bold;">Actualizado: {hora_estacion} hs</p>
                 </div>""", unsafe_allow_html=True)
 
-    # --- VELOCÍMETRO PLOTLY (Original) ---
+    # --- VELOCÍMETRO PLOTLY ---
     fig_gauge = go.Figure(go.Indicator(
         mode = "gauge+number",
         value = ie_act,
@@ -190,8 +190,8 @@ with col_izq:
             st.rerun()
 
 with col_der:
-    # --- GRÁFICO HISTÓRICO MATPLOTLIB (Altura aumentada) ---
-    fig, ax = plt.subplots(figsize=(10, 8)) # Altura 8 para ocupar más pantalla
+    # --- GRÁFICO HISTÓRICO MATPLOTLIB (Altura aumentada y márgenes forzados) ---
+    fig, ax = plt.subplots(figsize=(10, 10)) # Aumentamos más la altura relativa
     cmap_om = LinearSegmentedColormap.from_list("om", ["#F1F8E9", "#2E7D32", "#FFF9C4", "#D32F2F", "#B39DDB"])
     if not df_h.empty:
         xn = mdates.date2num(df_h['Fecha'])
@@ -220,8 +220,8 @@ with col_der:
         ax.set_ylabel("Delta T (°C)", fontsize=12, fontweight='bold')
         ax.grid(True, alpha=0.3)
         
-        # Ajuste estrecho de márgenes para maximizar espacio
-        plt.subplots_adjust(left=0.08, right=0.98, top=0.95, bottom=0.15)
+        # Márgenes muy ajustados
+        plt.subplots_adjust(left=0.08, right=0.98, top=0.98, bottom=0.15)
         
     st.pyplot(fig, use_container_width=True)
 
