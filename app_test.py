@@ -124,7 +124,7 @@ with col_izq:
                 <small>Actualizado: {hora_estacion} hs</small>
                 </div>""", unsafe_allow_html=True)
 
-    # --- VELOCÍMETRO TRADICIONAL (Con Aguja) ---
+    # --- VELOCÍMETRO TRADICIONAL (Aguja Gruesa) ---
     fig_gauge = go.Figure(go.Indicator(
         mode = "gauge",
         value = ie_act,
@@ -132,7 +132,7 @@ with col_izq:
         title = {'text': "Delta T (°C)", 'font': {'size': 16}},
         gauge = {
             'axis': {'range': [0, 15], 'tickwidth': 1, 'tickcolor': "black"},
-            'bar': {'color': "rgba(0,0,0,0)"}, # Ocultar barra de relleno
+            'bar': {'color': "rgba(0,0,0,0)"},
             'bgcolor': "white",
             'borderwidth': 2,
             'bordercolor': "gray",
@@ -142,10 +142,10 @@ with col_izq:
                 {'range': [8, 9.5], 'color': "#FFF9C4"}, # Precaución
                 {'range': [9.5, 15], 'color': "#D32F2F"} # Alta evap
             ],
-            # --- AGUJA ---
+            # --- AGUJA REFORZADA ---
             'threshold': {
-                'line': {'color': "black", 'width': 4},
-                'thickness': 0.75,
+                'line': {'color': "black", 'width': 6}, # MÁS GRUESA
+                'thickness': 0.9, # MÁS LARGA
                 'value': ie_act
             }
         }))
