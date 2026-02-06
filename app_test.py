@@ -41,7 +41,7 @@ SHEET_ID = "1r0sqF8qNFBgVesDY_cqKKL71hQzmBXnGsQZVlszl0hk"
 URL_SHEET = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv"
 
 # --- 3. GESTIÓN DE SESIÓN Y BD SQLITE ---
-# Inicialización segura de session_state para evitar AttributeError
+# ID único persistente durante la sesión del navegador
 if 'user_id' not in st.session_state:
     st.session_state.user_id = str(uuid.uuid4())
 if 'aplicando' not in st.session_state:
@@ -49,6 +49,7 @@ if 'aplicando' not in st.session_state:
 if 'inicio_app' not in st.session_state:
     st.session_state.inicio_app = None
 
+# Nombre del archivo de base de datos específico para esta sesión de navegador
 DB_NAME = f"registros_{st.session_state.user_id}.db"
 
 def init_db():
@@ -68,8 +69,8 @@ def guardar_registro(hora, dt, viento, direccion):
 
 def obtener_registros():
     conn = sqlite3.connect(DB_NAME)
-    # Comprobar si la tabla existe antes de leer
     c = conn.cursor()
+    # Verificar si la tabla existe
     c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='registros'")
     if c.fetchone():
         df = pd.read_sql_query("SELECT * FROM registros", conn)
@@ -86,6 +87,7 @@ def borrar_registros():
     conn.close()
     init_db()
 
+# Inicializar la base de datos cada vez que se carga el script
 init_db()
 
 # --- FUNCIONES ---
@@ -107,6 +109,7 @@ def cargar_datos():
     h = {"Authorization": TOKEN_OMI, "Content-Type": "application/json"}
     p = {"stations": {SERIE_OMI: {"modules": []}}}
     v_act, ie_act, dir_txt, hora_estacion, dt_estacion = 0.0, 0.0, "N/A", "--:--", None
+    
     try:
         res = requests.post(URL_OMI, json=p, headers=h, timeout=10)
         if res.status_code == 200:
@@ -118,13 +121,16 @@ def cargar_datos():
             
             fecha_raw = data.get("date", "")
             if "T" in fecha_raw: 
+                # Convertir UTC a hora local (restando 3 horas)
                 fecha_dt = datetime.strptime(fecha_raw, '%Y-%m-%dT%H:%M:%S.%fZ')
-                dt_estacion = fecha_dt - timedelta(hours=3) # Hora local
+                dt_estacion = fecha_dt - timedelta(hours=3) # <--- HORA LOCAL CORREGIDA
                 hora_estacion = dt_estacion.strftime('%H:%M')
-    except: 
+    except Exception as e:
+        st.error(f"Error cargando datos OMIXOM: {e}")
         hora_estacion = (datetime.now() - timedelta(hours=3)).strftime('%H:%M')
         dt_estacion = datetime.now() - timedelta(hours=3)
 
+    # Cargar histórico de Google Sheet
     try:
         df_h = pd.read_csv(URL_SHEET, skiprows=5)
         df_h.columns = ['Fecha', 'Temperatura', 'Humedad', 'Viento'] + list(df_h.columns[4:])
@@ -203,7 +209,7 @@ with col_izq:
         
         if st.button("➕ Registrar Dato Ahora", use_container_width=True):
             guardar_registro(dt_estacion.strftime('%H:%M:%S'), ie_act, v_act, dir_txt)
-            st.toast("Dato registrado en BD")
+            st.toast(f"Dato registrado: {dt_estacion.strftime('%H:%M')}")
             st.rerun()
         
         if st.button("🏁 Finalizar y Generar Informe", use_container_width=True):
@@ -211,7 +217,7 @@ with col_izq:
             st.rerun()
 
 with col_der:
-    # --- GRÁFICO HISTÓRICO ---
+    # --- GRÁFICO HISTÓRICO MATPLOTLIB ---
     fig, ax = plt.subplots(figsize=(10, 7))
     cmap_om = LinearSegmentedColormap.from_list("om", ["#F1F8E9", "#2E7D32", "#FFF9C4", "#D32F2F", "#B39DDB"])
     if not df_h.empty:
@@ -269,7 +275,6 @@ if not st.session_state.aplicando and not df_final.empty:
     pdf.set_font("Arial", size=12)
     pdf.cell(200, 10, txt=f"Ingeniero: León - MP 4490", ln=1)
     
-    # Manejo de fecha de inicio si no existe en session_state
     inicio_str = st.session_state.inicio_app.strftime('%d/%m/%Y %H:%M') if st.session_state.inicio_app else "N/A"
     pdf.cell(200, 10, txt=f"Inicio: {inicio_str}", ln=1)
     pdf.cell(200, 10, txt=f"Fin: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=1); pdf.ln(5)
@@ -295,6 +300,7 @@ if not st.session_state.aplicando and not df_final.empty:
     if st.button("Limpiar registros y empezar nueva"):
         borrar_registros()
         st.rerun()
+
 
 
 
