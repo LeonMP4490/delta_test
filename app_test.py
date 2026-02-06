@@ -163,7 +163,8 @@ with col_izq:
             st.session_state.hora_inicio = datetime.now()
             st.rerun()
     else:
-        st.warning(f"⚠️ Aplicación activa.\nInicio: {st.session_state.hora_inicio.strftime('%H:%M:%S')}")
+        # Se muestra la hora de inicio claramente
+        st.info(f"⚡ Aplicación activa.\nInicio: **{st.session_state.hora_inicio.strftime('%H:%M:%S')}**")
         
         if st.button("🏁 Finalizar y Generar Informe", use_container_width=True):
             st.session_state.aplicando = False
@@ -193,7 +194,7 @@ st.caption(f"Última actualización visual: {datetime.now().strftime('%H:%M:%S')
 st.markdown("---")
 if not st.session_state.aplicando and st.session_state.hora_fin is not None:
     
-    # 1. Filtrar datos del JSON entre inicio y fin
+    # Filtrar datos del JSON entre inicio y fin
     df_historico = pd.DataFrame(historico_datos)
     df_historico['fecha'] = pd.to_datetime(df_historico['fecha'])
     
@@ -202,7 +203,6 @@ if not st.session_state.aplicando and st.session_state.hora_fin is not None:
     
     if not df_final.empty:
         st.success("✅ Informe listo para descargar")
-        st.dataframe(df_final[['fecha', 'dt', 'viento', 'dir']], use_container_width=True)
         
         # Cálculos estadísticos
         min_dt = df_final['dt'].min()
@@ -214,6 +214,8 @@ if not st.session_state.aplicando and st.session_state.hora_fin is not None:
         col_res1.metric("Delta T Promedio", f"{mean_dt:.1f} °C")
         col_res2.metric("Delta T Min/Max", f"{min_dt:.1f} / {max_dt:.1f} °C")
         col_res3.metric("Viento Promedio", f"{mean_viento:.1f} km/h")
+        
+        st.dataframe(df_final[['fecha', 'dt', 'viento', 'dir']], use_container_width=True)
         
         # PDF
         pdf = FPDF(); pdf.add_page(); pdf.set_font("Arial", 'B', 16)
@@ -247,19 +249,6 @@ if not st.session_state.aplicando and st.session_state.hora_fin is not None:
             st.download_button("📥 Descargar Informe PDF", f, file_name=nombre_archivo)
     else:
         st.warning("No se encontraron datos en el JSON para el período seleccionado.")
-
-
-
-### 💡 Ventajas de este enfoque
-
-* No requiere clics intermedios.
-* El informe se basa en datos reales registrados automáticamente cada 10 minutos en el JSON.
-* El cálculo es preciso para el rango de tiempo exacto que duró la aplicación.
-
-Probá este nuevo flujo, Ingeniero.
-
-
-
 
 
 
