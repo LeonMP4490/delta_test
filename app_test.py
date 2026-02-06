@@ -61,6 +61,7 @@ def actualizar_historico_json():
     h = {"Authorization": TOKEN_OMI, "Content-Type": "application/json"}
     p = {"stations": {SERIE_OMI: {"modules": []}}}
     
+    status = "Intentando conectar API..."
     try:
         res = requests.post(URL_OMI, json=p, headers=h, timeout=10)
         if res.status_code == 200:
@@ -88,12 +89,14 @@ def actualizar_historico_json():
             with open(JSON_HISTORICO, "w") as f:
                 json.dump(historico, f)
             
-            return historico
+            status = f"✅ API Actualizada: {datetime.now().strftime('%H:%M:%S')}"
+            return historico, status
     except Exception as e:
+        status = f"❌ Error API: {e}"
         if os.path.exists(JSON_HISTORICO):
             with open(JSON_HISTORICO, "r") as f:
-                return json.load(f)
-        return []
+                return json.load(f), f"⚠️ Usando Cache Local ({status})"
+        return [], status
 
 @st.cache_resource(ttl=600)
 def obtener_datos_cache():
@@ -104,7 +107,19 @@ st.image(URL_ICONO)
 st.markdown(f"<h3 style='text-align: center; color: #1A237E; margin-bottom: 0px;'>Monitor Bouquet</h3>", unsafe_allow_html=True)
 st.markdown(f"<p style='text-align: center; color: #555; font-weight: bold; margin-top: 0px;'>Ing. Agr. León - MP 4490</p>", unsafe_allow_html=True)
 
-historico_datos = obtener_datos_cache()
+# --- BARRA LATERAL (DEBUG) ---
+st.sidebar.markdown("### 🔧 Control")
+if st.sidebar.button("🔄 Forzar Actualización API"):
+    st.cache_resource.clear()
+    st.rerun()
+
+# Obtener historial actualizado
+historico_datos, log_status = obtener_datos_cache()
+
+# Mostrar estado en la barra lateral
+st.sidebar.caption(log_status)
+
+# Obtener dato actual (el último del histórico)
 datos_actuales = historico_datos[-1] if historico_datos else None
 
 col_izq, col_der = st.columns([1, 2.2])
@@ -163,7 +178,6 @@ with col_izq:
             st.session_state.hora_inicio = datetime.now()
             st.rerun()
     else:
-        # Se muestra la hora de inicio claramente
         st.info(f"⚡ Aplicación activa.\nInicio: **{st.session_state.hora_inicio.strftime('%H:%M:%S')}**")
         
         if st.button("🏁 Finalizar y Generar Informe", use_container_width=True):
@@ -249,6 +263,7 @@ if not st.session_state.aplicando and st.session_state.hora_fin is not None:
             st.download_button("📥 Descargar Informe PDF", f, file_name=nombre_archivo)
     else:
         st.warning("No se encontraron datos en el JSON para el período seleccionado.")
+
 
 
 
