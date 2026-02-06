@@ -61,7 +61,6 @@ def actualizar_historico_json():
     h = {"Authorization": TOKEN_OMI, "Content-Type": "application/json"}
     p = {"stations": {SERIE_OMI: {"modules": []}}}
     
-    status = "Intentando conectar API..."
     try:
         res = requests.post(URL_OMI, json=p, headers=h, timeout=10)
         if res.status_code == 200:
@@ -89,16 +88,15 @@ def actualizar_historico_json():
             with open(JSON_HISTORICO, "w") as f:
                 json.dump(historico, f)
             
-            status = f"✅ API Actualizada: {datetime.now().strftime('%H:%M:%S')}"
-            return historico, status
+            return historico
     except Exception as e:
-        status = f"❌ Error API: {e}"
         if os.path.exists(JSON_HISTORICO):
             with open(JSON_HISTORICO, "r") as f:
-                return json.load(f), f"⚠️ Usando Cache Local ({status})"
-        return [], status
+                return json.load(f)
+        return []
 
-@st.cache_resource(ttl=600)
+# --- CACHEO DE DATOS ---
+@st.cache_resource(ttl=600) # Se ejecuta cada 10 min por defecto
 def obtener_datos_cache():
     return actualizar_historico_json()
 
@@ -110,14 +108,12 @@ st.markdown(f"<p style='text-align: center; color: #555; font-weight: bold; marg
 # --- BARRA LATERAL (DEBUG) ---
 st.sidebar.markdown("### 🔧 Control")
 if st.sidebar.button("🔄 Forzar Actualización API"):
+    # ESTO ES LA CLAVE: Borra el caché
     st.cache_resource.clear()
     st.rerun()
 
 # Obtener historial actualizado
-historico_datos, log_status = obtener_datos_cache()
-
-# Mostrar estado en la barra lateral
-st.sidebar.caption(log_status)
+historico_datos = obtener_datos_cache()
 
 # Obtener dato actual (el último del histórico)
 datos_actuales = historico_datos[-1] if historico_datos else None
@@ -142,12 +138,14 @@ with col_izq:
         elif ie_act < 2: color, rec = "#F1F8E9", "ROCÍO / MOJADO"
         else: color, rec = "#2E7D32", "ÓPTIMO"
 
+        # --- CARTEL DE RECOMENDACIÓN ---
         st.markdown(f"""<div style="background-color:{color}; padding:10px; border-radius:10px; text-align:center; color:black; border: 2px solid #333;">
                     <h3 style="margin:0; font-size:18px;">{rec}</h3>
                     <p style="margin:5px 0; font-size:14px;">Viento: <b>{v_act:.1f} km/h ({dir_txt})</b><br>Delta T: <b>{ie_act:.1f}°C</b></p>
                     <p style="margin:0; font-size:12px; font-weight:bold;">Actualizado: {hora_act} hs</p>
                     </div>""", unsafe_allow_html=True)
 
+        # --- VELOCÍMETRO PLOTLY ---
         fig_gauge = go.Figure(go.Indicator(
             mode = "gauge+number",
             value = ie_act,
@@ -197,6 +195,7 @@ with col_der:
         ax.plot(df_plot['fecha'], df_plot['viento'], color='red', label='Viento', marker='.', markersize=2)
         ax.legend()
         ax.grid(True)
+        # Formatear eje X
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%d/%m\n%H:%M'))
         st.pyplot(fig)
     else:
