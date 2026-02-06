@@ -65,7 +65,8 @@ def actualizar_historico_json():
             data = res.json()[0]
             t, hum = data.get(ID_TEMP, 0), data.get(ID_HUM, 0)
             
-            # --- AJUSTE DE HORA (UTC a Argentina -3hs) ---
+            # --- AJUSTE DE HORA (Corregido para restar 3hs) ---
+            # Si estaba adelantado 3hs, tenemos que RESTARLE 3 horas a la fecha actual del sistema.
             fecha_local = datetime.now() - timedelta(hours=3)
             
             nuevo_dato = {
@@ -185,7 +186,6 @@ with col_izq:
 
 with col_der:
     # --- GRÁFICO HISTÓRICO (BASADO EN JSON 36HS) ---
-    # Título removido según solicitud
     if historico_datos:
         df_plot = pd.DataFrame(historico_datos)
         df_plot['fecha'] = pd.to_datetime(df_plot['fecha'])
@@ -195,23 +195,7 @@ with col_der:
         fig.patch.set_facecolor('#f0f2f6') # Fondo exterior
         ax.set_facecolor('#ffffff') # Fondo interior gráfico
         
-        # --- COLORES DE FONDO SEGÚN RIESGO (Delta T + Viento) ---
-        # Lógica restaurada para considerar el viento también
-        for _, row in df_plot.iterrows():
-            v = row['viento']
-            ie = row['dt']
-            
-            # Definir color de franja por tiempo (simple)
-            if v < 2 or v > 15: color = '#B39DDB' # Viento crítico
-            elif ie >= 9.5: color = '#FFCDD2'     # Peligro evaporación
-            elif ie >= 8 or v >= 11: color = '#FFF9C4' # Precaución
-            elif ie < 2: color = '#F1F8E9'        # Rocío
-            else: color = '#E8F5E9'               # Óptimo
-            
-            # Este enfoque de axhspan es más simple para franjas horizontales fijas
-            # Si se desea colorear por punto temporal, requiere otra lógica.
-            # Por ahora mantenemos los rangos estándar de Delta T como fondo general:
-        
+        # --- COLORES DE FONDO SEGÚN RIESGO (Delta T) ---
         ax.axhspan(0, 2, facecolor='#F1F8E9', alpha=0.5)    # Rocío
         ax.axhspan(2, 8, facecolor='#E8F5E9', alpha=0.5)    # Óptimo
         ax.axhspan(8, 9.5, facecolor='#FFF9C4', alpha=0.5)  # Precaución
@@ -295,5 +279,6 @@ if not st.session_state.aplicando and st.session_state.hora_fin is not None:
             st.download_button("📥 Descargar Informe PDF", f, file_name=nombre_archivo)
     else:
         st.warning("No se encontraron datos en el JSON para el período seleccionado.")
+
 
 
