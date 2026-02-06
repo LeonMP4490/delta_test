@@ -41,7 +41,6 @@ SHEET_ID = "1r0sqF8qNFBgVesDY_cqKKL71hQzmBXnGsQZVlszl0hk"
 URL_SHEET = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv"
 
 # --- 3. GESTIÓN DE SESIÓN Y BD SQLITE ---
-# ID único persistente durante la sesión del navegador
 if 'user_id' not in st.session_state:
     st.session_state.user_id = str(uuid.uuid4())
 if 'aplicando' not in st.session_state:
@@ -49,7 +48,6 @@ if 'aplicando' not in st.session_state:
 if 'inicio_app' not in st.session_state:
     st.session_state.inicio_app = None
 
-# Nombre del archivo de base de datos específico para esta sesión de navegador
 DB_NAME = f"registros_{st.session_state.user_id}.db"
 
 def init_db():
@@ -70,7 +68,6 @@ def guardar_registro(hora, dt, viento, direccion):
 def obtener_registros():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    # Verificar si la tabla existe
     c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='registros'")
     if c.fetchone():
         df = pd.read_sql_query("SELECT * FROM registros", conn)
@@ -87,7 +84,6 @@ def borrar_registros():
     conn.close()
     init_db()
 
-# Inicializar la base de datos cada vez que se carga el script
 init_db()
 
 # --- FUNCIONES ---
@@ -120,11 +116,13 @@ def cargar_datos():
             ie_act = calcular_ie(t, hum)
             
             fecha_raw = data.get("date", "")
-            if "T" in fecha_raw: 
-                # Convertir UTC a hora local (restando 3 horas)
-                fecha_dt = datetime.strptime(fecha_raw, '%Y-%m-%dT%H:%M:%S.%fZ')
-                dt_estacion = fecha_dt - timedelta(hours=3) # <--- HORA LOCAL CORREGIDA
+            if fecha_raw:
+                # --- CORRECCIÓN DE FECHA ---
+                # Formato nuevo: 2026-02-06T10:20:00-03:00
+                # Usamos fromisoformat que maneja el offset -03:00 automáticamente
+                dt_estacion = datetime.fromisoformat(fecha_raw)
                 hora_estacion = dt_estacion.strftime('%H:%M')
+                
     except Exception as e:
         st.error(f"Error cargando datos OMIXOM: {e}")
         hora_estacion = (datetime.now() - timedelta(hours=3)).strftime('%H:%M')
@@ -193,7 +191,6 @@ with col_izq:
     # --- BOTONES DE CONTROL CON BD ---
     st.markdown("---")
     
-    # Comprobar si hay registros activos
     df_temp = obtener_registros()
     registros_activos = not df_temp.empty
 
@@ -217,7 +214,7 @@ with col_izq:
             st.rerun()
 
 with col_der:
-    # --- GRÁFICO HISTÓRICO MATPLOTLIB ---
+    # --- GRÁFICO HISTÓRICO ---
     fig, ax = plt.subplots(figsize=(10, 7))
     cmap_om = LinearSegmentedColormap.from_list("om", ["#F1F8E9", "#2E7D32", "#FFF9C4", "#D32F2F", "#B39DDB"])
     if not df_h.empty:
@@ -258,7 +255,6 @@ if not st.session_state.aplicando and not df_final.empty:
     st.subheader("Resumen de Registros de la Aplicación")
     st.dataframe(df_final, use_container_width=True)
     
-    # Cálculos
     min_dt = df_final['dt'].min(); max_dt = df_final['dt'].max()
     mean_dt = df_final['dt'].mean(); mean_viento = df_final['viento'].mean()
     dir_predominante = df_final['direccion'].mode()[0] if not df_final['direccion'].mode().empty else "N/A"
@@ -269,7 +265,6 @@ if not st.session_state.aplicando and not df_final.empty:
     col_res3.metric("Viento Promedio", f"{mean_viento:.1f} km/h")
     st.write(f"**Dirección Viento Predominante:** {dir_predominante}")
     
-    # PDF
     pdf = FPDF(); pdf.add_page(); pdf.set_font("Arial", size=12); pdf.set_font("Arial", 'B', 16)
     pdf.cell(200, 10, txt="Informe de Aplicación - Monitor Leon", ln=1, align='C'); pdf.ln(10)
     pdf.set_font("Arial", size=12)
@@ -284,7 +279,6 @@ if not st.session_state.aplicando and not df_final.empty:
     pdf.cell(200, 10, txt=f"- Delta T: Prom {mean_dt:.1f}°C (Min {min_dt:.1f}°C - Max {max_dt:.1f}°C)", ln=1)
     pdf.cell(200, 10, txt=f"- Viento: Prom {mean_viento:.1f} km/h - Predom: {dir_predominante}", ln=1); pdf.ln(10)
     
-    # Tabla en PDF
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(40, 10, "Hora", 1); pdf.cell(40, 10, "Delta T (°C)", 1); pdf.cell(40, 10, "Viento (km/h)", 1); pdf.cell(40, 10, "Direccion", 1); pdf.ln()
     pdf.set_font("Arial", size=10)
@@ -300,6 +294,7 @@ if not st.session_state.aplicando and not df_final.empty:
     if st.button("Limpiar registros y empezar nueva"):
         borrar_registros()
         st.rerun()
+
 
 
 
