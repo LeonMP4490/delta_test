@@ -302,3 +302,4 @@ if not st.session_state.aplicando and not df_final.empty:
 
 
 
+
