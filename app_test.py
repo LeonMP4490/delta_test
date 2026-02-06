@@ -4,9 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from datetime import timedelta, datetime
-from matplotlib.colors import LinearSegmentedColormap
-from scipy.ndimage import gaussian_filter
-from scipy.interpolate import interp1d
 import requests
 from fpdf import FPDF
 import plotly.graph_objects as go
@@ -76,6 +73,7 @@ def actualizar_historico_json():
                 "dt": calcular_ie(t, hum)
             }
             
+            # Leer o crear histórico
             if os.path.exists(JSON_HISTORICO):
                 with open(JSON_HISTORICO, "r") as f:
                     historico = json.load(f)
@@ -83,20 +81,21 @@ def actualizar_historico_json():
                 historico = []
             
             historico.append(nuevo_dato)
-            historico = historico[-216:] # Últimas 36hs
+            historico = historico[-216:] # Últimas 36hs (216 intervalos de 10 min)
             
             with open(JSON_HISTORICO, "w") as f:
                 json.dump(historico, f)
             
             return historico
     except Exception as e:
+        # En caso de error API, cargar lo que haya en disco
         if os.path.exists(JSON_HISTORICO):
             with open(JSON_HISTORICO, "r") as f:
                 return json.load(f)
         return []
 
 # --- CACHEO DE DATOS ---
-@st.cache_resource(ttl=600) # Se ejecuta cada 10 min por defecto
+@st.cache_resource(ttl=600) # Se ejecuta cada 10 min
 def obtener_datos_cache():
     return actualizar_historico_json()
 
@@ -105,10 +104,8 @@ st.image(URL_ICONO)
 st.markdown(f"<h3 style='text-align: center; color: #1A237E; margin-bottom: 0px;'>Monitor Bouquet</h3>", unsafe_allow_html=True)
 st.markdown(f"<p style='text-align: center; color: #555; font-weight: bold; margin-top: 0px;'>Ing. Agr. León - MP 4490</p>", unsafe_allow_html=True)
 
-# --- BARRA LATERAL (DEBUG) ---
-st.sidebar.markdown("### 🔧 Control")
-if st.sidebar.button("🔄 Forzar Actualización API"):
-    # ESTO ES LA CLAVE: Borra el caché
+# --- BOTÓN DE RECARGA MANUAL (DEBUG) ---
+if st.sidebar.button("🔄 Forzar Actualización Datos"):
     st.cache_resource.clear()
     st.rerun()
 
@@ -120,7 +117,7 @@ datos_actuales = historico_datos[-1] if historico_datos else None
 
 col_izq, col_der = st.columns([1, 2.2])
 
-# Inicializar estados de sesión
+# Inicializar estados de sesión para el control automático
 if 'aplicando' not in st.session_state: st.session_state.aplicando = False
 if 'hora_inicio' not in st.session_state: st.session_state.hora_inicio = None
 if 'hora_fin' not in st.session_state: st.session_state.hora_fin = None
@@ -203,14 +200,17 @@ with col_der:
 
 st.caption(f"Última actualización visual: {datetime.now().strftime('%H:%M:%S')}")
 
-# --- 5. GENERACIÓN DE PDF Y RESUMEN (CÁLCULO AUTOMÁTICO) ---
+# --- 5. GENERACIÓN DE PDF Y RESUMEN (CÁLCULO AUTOMÁTICO BASADO EN JSON) ---
 st.markdown("---")
 if not st.session_state.aplicando and st.session_state.hora_fin is not None:
     
-    # Filtrar datos del JSON entre inicio y fin
-    df_historico = pd.DataFrame(historico_datos)
+    # 1. Obtener los datos del JSON completo nuevamente para asegurar frescura
+    with open(JSON_HISTORICO, "r") as f:
+        data_json = json.load(f)
+    df_historico = pd.DataFrame(data_json)
     df_historico['fecha'] = pd.to_datetime(df_historico['fecha'])
     
+    # 2. Filtrar datos del JSON entre inicio y fin de la aplicación
     mask = (df_historico['fecha'] >= st.session_state.hora_inicio) & (df_historico['fecha'] <= st.session_state.hora_fin)
     df_final = df_historico.loc[mask]
     
@@ -230,7 +230,7 @@ if not st.session_state.aplicando and st.session_state.hora_fin is not None:
         
         st.dataframe(df_final[['fecha', 'dt', 'viento', 'dir']], use_container_width=True)
         
-        # PDF
+        # --- PDF ---
         pdf = FPDF(); pdf.add_page(); pdf.set_font("Arial", 'B', 16)
         pdf.cell(200, 10, txt="Informe de Aplicación", ln=1, align='C'); pdf.ln(10)
         pdf.set_font("Arial", size=12)
@@ -262,9 +262,5 @@ if not st.session_state.aplicando and st.session_state.hora_fin is not None:
             st.download_button("📥 Descargar Informe PDF", f, file_name=nombre_archivo)
     else:
         st.warning("No se encontraron datos en el JSON para el período seleccionado.")
-
-
-
-
 
 
