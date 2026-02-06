@@ -117,14 +117,23 @@ def cargar_datos():
             
             fecha_raw = data.get("date", "")
             if fecha_raw:
-                # --- CORRECCIÓN DE FECHA ---
-                # Formato nuevo: 2026-02-06T10:20:00-03:00
-                # Usamos fromisoformat que maneja el offset -03:00 automáticamente
-                dt_estacion = datetime.fromisoformat(fecha_raw)
+                # --- CORRECCIÓN DE FECHA ROBUSTA ---
+                # 1. Quitar la parte de los milisegundos si existe (.fZ)
+                if "." in fecha_raw:
+                    fecha_raw = fecha_raw.split(".")[0] + fecha_raw.split("-")[-1] # Simplificación extrema
+
+                # Intentar parsear de forma más flexible
+                try:
+                    dt_estacion = datetime.fromisoformat(fecha_raw)
+                except ValueError:
+                    # Si falla por el formato del huso horario, forzar conversión
+                    dt_estacion = datetime.strptime(fecha_raw, '%Y-%m-%dT%H:%M:%S')
+
                 hora_estacion = dt_estacion.strftime('%H:%M')
                 
     except Exception as e:
         st.error(f"Error cargando datos OMIXOM: {e}")
+        # Hora de respaldo en hora local
         hora_estacion = (datetime.now() - timedelta(hours=3)).strftime('%H:%M')
         dt_estacion = datetime.now() - timedelta(hours=3)
 
@@ -294,6 +303,7 @@ if not st.session_state.aplicando and not df_final.empty:
     if st.button("Limpiar registros y empezar nueva"):
         borrar_registros()
         st.rerun()
+
 
 
 
