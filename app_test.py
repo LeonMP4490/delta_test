@@ -10,6 +10,8 @@ from scipy.interpolate import interp1d
 import requests
 from fpdf import FPDF
 import plotly.graph_objects as go
+import sqlite3
+import uuid
 
 # 1. CONFIGURACIÓN E ICONO
 URL_ICONO = "ICONO_2.png" 
@@ -38,12 +40,41 @@ ID_TEMP, ID_HUM, ID_VIENTO, ID_DIR = "19951", "19937", "19954", "19933"
 SHEET_ID = "1r0sqF8qNFBgVesDY_cqKKL71hQzmBXnGsQZVlszl0hk"
 URL_SHEET = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv"
 
-# --- 3. GESTIÓN DE SESIÓN ROBUSTA ---
-# Usamos el tiempo de la API de OMIXOM para decidir cuándo registrar
-if 'aplicando' not in st.session_state: st.session_state.aplicando = False
-if 'datos_registro' not in st.session_state: st.session_state.datos_registro = []
-if 'inicio_app' not in st.session_state: st.session_state.inicio_app = None
-if 'ultima_hora_registro' not in st.session_state: st.session_state.ultima_hora_registro = None
+# --- 3. GESTIÓN DE SESIÓN Y BD SQLITE ---
+if 'user_id' not in st.session_state:
+    st.session_state.user_id = str(uuid.uuid4()) # ID único por navegador
+
+DB_NAME = f"registros_{st.session_state.user_id}.db"
+
+def init_db():
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS registros
+                 (hora TEXT, dt REAL, viento REAL, direccion TEXT)''')
+    conn.commit()
+    conn.close()
+
+def guardar_registro(hora, dt, viento, direccion):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("INSERT INTO registros VALUES (?, ?, ?, ?)", (hora, dt, viento, direccion))
+    conn.commit()
+    conn.close()
+
+def obtener_registros():
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql_query("SELECT * FROM registros", conn)
+    conn.close()
+    return df
+
+def borrar_registros():
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("DELETE FROM registros")
+    conn.commit()
+    conn.close()
+
+init_db()
 
 # --- FUNCIONES ---
 def grados_a_direccion(grados):
@@ -59,7 +90,7 @@ def calcular_ie(T, hr):
           0.00391838 * (hr**1.5) * np.arctan(0.023101 * hr) - 4.686035)
     return round(T - tw, 2)
 
-@st.cache_data(ttl=60) # Refrescar datos más rápido para mayor precisión
+@st.cache_data(ttl=60) 
 def cargar_datos():
     h = {"Authorization": TOKEN_OMI, "Content-Type": "application/json"}
     p = {"stations": {SERIE_OMI: {"modules": []}}}
@@ -141,34 +172,39 @@ with col_izq:
     fig_gauge.update_layout(height=250, margin=dict(l=20, r=20, t=30, b=10))
     st.plotly_chart(fig_gauge, use_container_width=True)
 
-    # --- BOTONES DE CONTROL CON REGISTRO ROBUSTO ---
+    # --- BOTONES DE CONTROL CON BD ---
     st.markdown("---")
-    if not st.session_state.aplicando:
+    
+    # Comprobar si hay registros activos
+    df_temp = obtener_registros()
+    registros_activos = not df_temp.empty
+
+    if not registros_activos:
         if st.button("🔴 Iniciar Aplicación", use_container_width=True):
             st.session_state.aplicando = True
-            st.session_state.datos_registro = [] 
             st.session_state.inicio_app = dt_estacion
-            st.session_state.ultima_hora_registro = dt_estacion - timedelta(minutes=11)
+            # Guardamos el primer registro
+            guardar_registro(dt_estacion.strftime('%H:%M:%S'), ie_act, v_act, dir_txt)
             st.rerun()
     else:
-        st.warning(f"⚠️ Aplicación activa.\nIniciada: {st.session_state.inicio_app.strftime('%H:%M:%S')}")
+        st.warning(f"⚠️ Aplicación activa.\nRegistros guardados: {len(df_temp)}")
         
-        # --- LÓGICA DE REGISTRO ROBUSTA ---
-        # Registra basado en la hora de la estación, no en el tiempo real del celular
-        if (dt_estacion - st.session_state.ultima_hora_registro) >= timedelta(minutes=10):
-            st.session_state.datos_registro.append({
-                'Hora': dt_estacion.strftime('%H:%M:%S'),
-                'DT': ie_act, 'Viento': v_act, 'Direccion': dir_txt
-            })
-            st.session_state.ultima_hora_registro = dt_estacion
-            st.toast(f"Registro automático: {dt_estacion.strftime('%H:%M')}")
+        # --- LÓGICA DE REGISTRO EN BD ---
+        ultimo_registro_hora = datetime.strptime(df_temp['hora'].iloc[-1], '%H:%M:%S').time()
+        # Nota: Este checkeo es simple, la mejor forma es guardar la fecha completa en la BD
         
-        if st.button("🏁 Finalizar Aplicación", use_container_width=True):
+        if st.button("➕ Registrar Dato Ahora", use_container_width=True):
+            guardar_registro(dt_estacion.strftime('%H:%M:%S'), ie_act, v_act, dir_txt)
+            st.toast("Dato registrado en BD")
+            st.rerun()
+        
+        if st.button("🏁 Finalizar y Generar Informe", use_container_width=True):
             st.session_state.aplicando = False
+            # La generación del reporte ocurre abajo
             st.rerun()
 
 with col_der:
-    # --- GRÁFICO HISTÓRICO MATPLOTLIB (Alta resolución forzada) ---
+    # --- GRÁFICO HISTÓRICO ---
     fig, ax = plt.subplots(figsize=(10, 7))
     cmap_om = LinearSegmentedColormap.from_list("om", ["#F1F8E9", "#2E7D32", "#FFF9C4", "#D32F2F", "#B39DDB"])
     if not df_h.empty:
@@ -202,27 +238,53 @@ st.caption(f"Estación Cooperativa de Bouquet | {datetime.now().strftime('%d/%m 
 
 # --- 5. GENERACIÓN DE PDF Y RESUMEN ---
 st.markdown("---")
-if not st.session_state.aplicando and st.session_state.inicio_app:
-    st.success("✅ Aplicación finalizada. Generando reporte...")
-    df = pd.DataFrame(st.session_state.datos_registro)
-    if not df.empty:
-        st.subheader("Resumen de Registros de la Aplicación")
-        df_display = df.copy()
-        df_display['DT'] = df_display['DT'].map('{:,.2f}'.format)
-        df_display['Viento'] = df_display['Viento'].map('{:,.2f}'.format)
-        st.dataframe(df_display, use_container_width=True)
-        min_dt = df['DT'].min(); max_dt = df['DT'].max(); mean_dt = df['DT'].mean(); mean_viento = df['Viento'].mean()
-        dir_predominante = df['Direccion'].mode()[0] if not df['Direccion'].mode().empty else "N/A"
-        col_res1, col_res2, col_res3 = st.columns(3)
-        col_res1.metric("Delta T Promedio", f"{mean_dt:.1f} °C"); col_res2.metric("Delta T Min/Max", f"{min_dt:.1f} / {max_dt:.1f} °C"); col_res3.metric("Viento Promedio", f"{mean_viento:.1f} km/h")
-        st.write(f"**Dirección Viento Predominante:** {dir_predominante}")
-        pdf = FPDF(); pdf.add_page(); pdf.set_font("Arial", size=12); pdf.set_font("Arial", 'B', 16); pdf.cell(200, 10, txt="Informe de Aplicación - Monitor Leon", ln=1, align='C'); pdf.ln(10); pdf.set_font("Arial", size=12); pdf.cell(200, 10, txt=f"Ingeniero: León - MP 4490", ln=1); pdf.cell(200, 10, txt=f"Inicio: {st.session_state.inicio_app.strftime('%d/%m/%Y %H:%M')}", ln=1); pdf.cell(200, 10, txt=f"Fin: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=1); pdf.ln(5); pdf.set_font("Arial", 'B', 12); pdf.cell(200, 10, txt="Resumen Estadístico:", ln=1); pdf.set_font("Arial", size=12); pdf.cell(200, 10, txt=f"- Delta T: Prom {mean_dt:.1f}°C (Min {min_dt:.1f}°C - Max {max_dt:.1f}°C)", ln=1); pdf.cell(200, 10, txt=f"- Viento: Prom {mean_viento:.1f} km/h - Predom: {dir_predominante}", ln=1); pdf.ln(10); pdf.set_font("Arial", 'B', 10); pdf.cell(40, 10, "Hora", 1); pdf.cell(40, 10, "Delta T (°C)", 1); pdf.cell(40, 10, "Viento (km/h)", 1); pdf.cell(40, 10, "Direccion", 1); pdf.ln(); pdf.set_font("Arial", size=10)
-        for _, row in df.iterrows(): pdf.cell(40, 10, row['Hora'], 1); pdf.cell(40, 10, str(row['DT']), 1); pdf.cell(40, 10, str(row['Viento']), 1); pdf.cell(40, 10, row['Direccion'], 1); pdf.ln()
-        nombre_archivo = f"Informe_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"; pdf.output(nombre_archivo)
-        with open(nombre_archivo, "rb") as f: st.download_button("📥 Descargar Informe PDF", f, file_name=nombre_archivo)
-    else: st.warning("No se registraron datos suficientes.")
-    if st.button("Nueva Aplicación"):
-        st.session_state.inicio_app = None; st.session_state.datos_registro = []; st.rerun()
+df_final = obtener_registros()
+if not st.session_state.aplicando and not df_final.empty:
+    st.success("✅ Generando reporte final...")
+    
+    st.subheader("Resumen de Registros de la Aplicación")
+    st.dataframe(df_final, use_container_width=True)
+    
+    # Cálculos
+    min_dt = df_final['dt'].min(); max_dt = df_final['dt'].max()
+    mean_dt = df_final['dt'].mean(); mean_viento = df_final['viento'].mean()
+    dir_predominante = df_final['direccion'].mode()[0] if not df_final['direccion'].mode().empty else "N/A"
+    
+    col_res1, col_res2, col_res3 = st.columns(3)
+    col_res1.metric("Delta T Promedio", f"{mean_dt:.1f} °C")
+    col_res2.metric("Delta T Min/Max", f"{min_dt:.1f} / {max_dt:.1f} °C")
+    col_res3.metric("Viento Promedio", f"{mean_viento:.1f} km/h")
+    st.write(f"**Dirección Viento Predominante:** {dir_predominante}")
+    
+    # PDF
+    pdf = FPDF(); pdf.add_page(); pdf.set_font("Arial", size=12); pdf.set_font("Arial", 'B', 16)
+    pdf.cell(200, 10, txt="Informe de Aplicación - Monitor Leon", ln=1, align='C'); pdf.ln(10)
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt=f"Ingeniero: León - MP 4490", ln=1)
+    pdf.cell(200, 10, txt=f"Inicio: {st.session_state.inicio_app.strftime('%d/%m/%Y %H:%M')}", ln=1)
+    pdf.cell(200, 10, txt=f"Fin: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=1); pdf.ln(5)
+    pdf.set_font("Arial", 'B', 12); pdf.cell(200, 10, txt="Resumen Estadístico:", ln=1)
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt=f"- Delta T: Prom {mean_dt:.1f}°C (Min {min_dt:.1f}°C - Max {max_dt:.1f}°C)", ln=1)
+    pdf.cell(200, 10, txt=f"- Viento: Prom {mean_viento:.1f} km/h - Predom: {dir_predominante}", ln=1); pdf.ln(10)
+    
+    # Tabla en PDF
+    pdf.set_font("Arial", 'B', 10)
+    pdf.cell(40, 10, "Hora", 1); pdf.cell(40, 10, "Delta T (°C)", 1); pdf.cell(40, 10, "Viento (km/h)", 1); pdf.cell(40, 10, "Direccion", 1); pdf.ln()
+    pdf.set_font("Arial", size=10)
+    for _, row in df_final.iterrows():
+        pdf.cell(40, 10, row['hora'], 1); pdf.cell(40, 10, str(row['dt']), 1); pdf.cell(40, 10, str(row['viento']), 1); pdf.cell(40, 10, row['direccion'], 1); pdf.ln()
+    
+    nombre_archivo = f"Informe_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+    pdf.output(nombre_archivo)
+    
+    with open(nombre_archivo, "rb") as f:
+        st.download_button("📥 Descargar Informe PDF", f, file_name=nombre_archivo)
+    
+    if st.button("Limpiar registros y empezar nueva"):
+        borrar_registros()
+        st.rerun()
+
 
 
 
