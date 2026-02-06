@@ -117,17 +117,22 @@ def cargar_datos():
             
             fecha_raw = data.get("date", "")
             if fecha_raw:
-                # --- CORRECCIÓN DE FECHA ROBUSTA ---
-                # 1. Quitar la parte de los milisegundos si existe (.fZ)
-                if "." in fecha_raw:
-                    fecha_raw = fecha_raw.split(".")[0] + fecha_raw.split("-")[-1] # Simplificación extrema
-
-                # Intentar parsear de forma más flexible
+                # --- CORRECCIÓN DE FECHA: FORZADO DE FORMATO ---
+                # 1. Limpiar caracteres extraños
+                fecha_limpia = fecha_raw.strip().replace(" ", "")
+                
+                # 2. Intentar parsear considerando el formato T y offset
+                # Usamos una estructura que soporte la T y la zona horaria
                 try:
-                    dt_estacion = datetime.fromisoformat(fecha_raw)
+                    # Este formato suele ser más robusto para ISO 8601 con offset
+                    dt_estacion = datetime.strptime(fecha_limpia, '%Y-%m-%dT%H:%M:%S%z')
                 except ValueError:
-                    # Si falla por el formato del huso horario, forzar conversión
-                    dt_estacion = datetime.strptime(fecha_raw, '%Y-%m-%dT%H:%M:%S')
+                    # Respaldo si falla el parseo de zona horaria
+                    try:
+                        dt_estacion = datetime.fromisoformat(fecha_limpia)
+                    except ValueError:
+                        # Respaldo total: intentar cortar la zona horaria y usar local
+                        dt_estacion = datetime.strptime(fecha_limpia[:19], '%Y-%m-%dT%H:%M:%S')
 
                 hora_estacion = dt_estacion.strftime('%H:%M')
                 
@@ -303,6 +308,7 @@ if not st.session_state.aplicando and not df_final.empty:
     if st.button("Limpiar registros y empezar nueva"):
         borrar_registros()
         st.rerun()
+
 
 
 
