@@ -12,6 +12,7 @@ from fpdf import FPDF
 import plotly.graph_objects as go
 import sqlite3
 import uuid
+import os
 
 # 1. CONFIGURACIÓN E ICONO
 URL_ICONO = "ICONO_2.png" 
@@ -48,10 +49,14 @@ if 'aplicando' not in st.session_state:
 if 'inicio_app' not in st.session_state:
     st.session_state.inicio_app = None
 
+# Base de datos única por sesión de navegador
 DB_NAME = f"registros_{st.session_state.user_id}.db"
 
+def get_connection():
+    return sqlite3.connect(DB_NAME)
+
 def init_db():
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_connection()
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS registros
                  (hora TEXT, dt REAL, viento REAL, direccion TEXT)''')
@@ -59,29 +64,29 @@ def init_db():
     conn.close()
 
 def guardar_registro(hora, dt, viento, direccion):
-    conn = sqlite3.connect(DB_NAME)
+    # Asegurar que la tabla existe antes de insertar
+    init_db()                
+    conn = get_connection()
     c = conn.cursor()
     c.execute("INSERT INTO registros VALUES (?, ?, ?, ?)", (hora, dt, viento, direccion))
     conn.commit()
     conn.close()
 
 def obtener_registros():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='registros'")
-    if c.fetchone():
+    if not os.path.exists(DB_NAME):
+        return pd.DataFrame(columns=['hora', 'dt', 'viento', 'direccion'])
+    
+    conn = get_connection()
+    try:
         df = pd.read_sql_query("SELECT * FROM registros", conn)
-    else:
+    except:
         df = pd.DataFrame(columns=['hora', 'dt', 'viento', 'direccion'])
     conn.close()
     return df
 
 def borrar_registros():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("DROP TABLE IF EXISTS registros")
-    conn.commit()
-    conn.close()
+    if os.path.exists(DB_NAME):
+        os.remove(DB_NAME)
     init_db()
 
 init_db()
@@ -95,16 +100,19 @@ def grados_a_direccion(grados):
 def calcular_ie(T, hr):
     if T is None or hr is None or np.isnan(T) or np.isnan(hr): return 0
     hr = min(max(hr, 0), 100)
+    # Fórmula de Delta T
     tw = (T * np.arctan(0.151977 * np.sqrt(hr + 8.313659)) + 
           np.arctan(T + hr) - np.arctan(hr - 1.676331) + 
           0.00391838 * (hr**1.5) * np.arctan(0.023101 * hr) - 4.686035)
     return round(T - tw, 2)
 
-@st.cache_data(ttl=60) 
+@st.cache_data(ttl=30) # Reducimos TTL para forzar actualización más rápida
 def cargar_datos():
     h = {"Authorization": TOKEN_OMI, "Content-Type": "application/json"}
     p = {"stations": {SERIE_OMI: {"modules": []}}}
-    v_act, ie_act, dir_txt, hora_estacion, dt_estacion = 0.0, 0.0, "N/A", "--:--", None
+    
+    # Valores por defecto en caso de error
+    v_act, ie_act, dir_txt, hora_estacion, dt_estacion = 0.0, 0.0, "N/A", "--:--", datetime.now()
     
     try:
         res = requests.post(URL_OMI, json=p, headers=h, timeout=10)
@@ -117,20 +125,23 @@ def cargar_datos():
             
             fecha_raw = data.get("date", "")
             if fecha_raw:
-                # --- CORRECCIÓN DEFINITIVA ---
-                # 1. Tomar solo los primeros 19 caracteres (YYYY-MM-DDTHH:MM:SS)
-                # Esto ignora el huso horario -03:00 que causa el conflicto.
+                # --- CORRECCIÓN FINAL ---
+                # Tomamos solo la parte de la fecha y hora sin zona horaria
                 fecha_simple = fecha_raw[:19]
-                
-                # 2. Parsear como una fecha local (asumiendo que la API da la hora correcta)
-                dt_estacion = datetime.strptime(fecha_simple, '%Y-%m-%dT%H:%M:%S')
-                hora_estacion = dt_estacion.strftime('%H:%M')
-                
+                try:
+                    dt_estacion = datetime.strptime(fecha_simple, '%Y-%m-%dT%H:%M:%S')
+                    hora_estacion = dt_estacion.strftime('%H:%M')
+                except:
+                    # Fallback si el corte falla
+                    hora_estacion = datetime.now().strftime('%H:%M')
+                    dt_estacion = datetime.now()
+        else:
+            st.error("Error en respuesta de la API OMIXOM")
+            
     except Exception as e:
         st.error(f"Error cargando datos OMIXOM: {e}")
-        # Hora de respaldo en hora local
-        hora_estacion = (datetime.now() - timedelta(hours=3)).strftime('%H:%M')
-        dt_estacion = datetime.now() - timedelta(hours=3)
+        hora_estacion = datetime.now().strftime('%H:%M')
+        dt_estacion = datetime.now()
 
     # Cargar histórico de Google Sheet
     try:
@@ -195,22 +206,23 @@ with col_izq:
     # --- BOTONES DE CONTROL CON BD ---
     st.markdown("---")
     
+    # Leemos registros de la BD cada vez
     df_temp = obtener_registros()
-    registros_activos = not df_temp.empty
+    registros_count = len(df_temp)
 
     if not st.session_state.aplicando:
         if st.button("🔴 Iniciar Aplicación", use_container_width=True):
             st.session_state.aplicando = True
-            st.session_state.inicio_app = dt_estacion
+            st.session_state.inicio_app = datetime.now()
             # Guardamos el primer registro
-            guardar_registro(dt_estacion.strftime('%H:%M:%S'), ie_act, v_act, dir_txt)
+            guardar_registro(datetime.now().strftime('%H:%M:%S'), ie_act, v_act, dir_txt)
             st.rerun()
     else:
-        st.warning(f"⚠️ Aplicación activa.\nRegistros guardados: {len(df_temp)}")
+        st.warning(f"⚠️ Aplicación activa.\nRegistros guardados: {registros_count}")
         
         if st.button("➕ Registrar Dato Ahora", use_container_width=True):
-            guardar_registro(dt_estacion.strftime('%H:%M:%S'), ie_act, v_act, dir_txt)
-            st.toast(f"Dato registrado: {dt_estacion.strftime('%H:%M')}")
+            guardar_registro(datetime.now().strftime('%H:%M:%S'), ie_act, v_act, dir_txt)
+            st.toast(f"Dato registrado: {datetime.now().strftime('%H:%M:%S')}")
             st.rerun()
         
         if st.button("🏁 Finalizar y Generar Informe", use_container_width=True):
@@ -279,7 +291,7 @@ if not st.session_state.aplicando and not df_final.empty:
     pdf.cell(200, 10, txt=f"Fin: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=1); pdf.ln(5)
     
     pdf.set_font("Arial", 'B', 12); pdf.cell(200, 10, txt="Resumen Estadístico:", ln=1)
-    pdf.set_font("Arial size=12")
+    pdf.set_font("Arial", size=12)
     pdf.cell(200, 10, txt=f"- Delta T: Prom {mean_dt:.1f}°C (Min {min_dt:.1f}°C - Max {max_dt:.1f}°C)", ln=1)
     pdf.cell(200, 10, txt=f"- Viento: Prom {mean_viento:.1f} km/h - Predom: {dir_predominante}", ln=1); pdf.ln(10)
     
