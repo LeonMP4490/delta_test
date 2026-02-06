@@ -117,23 +117,13 @@ def cargar_datos():
             
             fecha_raw = data.get("date", "")
             if fecha_raw:
-                # --- CORRECCIÓN DE FECHA: FORZADO DE FORMATO ---
-                # 1. Limpiar caracteres extraños
-                fecha_limpia = fecha_raw.strip().replace(" ", "")
+                # --- CORRECCIÓN DEFINITIVA ---
+                # 1. Tomar solo los primeros 19 caracteres (YYYY-MM-DDTHH:MM:SS)
+                # Esto ignora el huso horario -03:00 que causa el conflicto.
+                fecha_simple = fecha_raw[:19]
                 
-                # 2. Intentar parsear considerando el formato T y offset
-                # Usamos una estructura que soporte la T y la zona horaria
-                try:
-                    # Este formato suele ser más robusto para ISO 8601 con offset
-                    dt_estacion = datetime.strptime(fecha_limpia, '%Y-%m-%dT%H:%M:%S%z')
-                except ValueError:
-                    # Respaldo si falla el parseo de zona horaria
-                    try:
-                        dt_estacion = datetime.fromisoformat(fecha_limpia)
-                    except ValueError:
-                        # Respaldo total: intentar cortar la zona horaria y usar local
-                        dt_estacion = datetime.strptime(fecha_limpia[:19], '%Y-%m-%dT%H:%M:%S')
-
+                # 2. Parsear como una fecha local (asumiendo que la API da la hora correcta)
+                dt_estacion = datetime.strptime(fecha_simple, '%Y-%m-%dT%H:%M:%S')
                 hora_estacion = dt_estacion.strftime('%H:%M')
                 
     except Exception as e:
@@ -289,7 +279,7 @@ if not st.session_state.aplicando and not df_final.empty:
     pdf.cell(200, 10, txt=f"Fin: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=1); pdf.ln(5)
     
     pdf.set_font("Arial", 'B', 12); pdf.cell(200, 10, txt="Resumen Estadístico:", ln=1)
-    pdf.set_font("Arial", size=12)
+    pdf.set_font("Arial size=12")
     pdf.cell(200, 10, txt=f"- Delta T: Prom {mean_dt:.1f}°C (Min {min_dt:.1f}°C - Max {max_dt:.1f}°C)", ln=1)
     pdf.cell(200, 10, txt=f"- Viento: Prom {mean_viento:.1f} km/h - Predom: {dir_predominante}", ln=1); pdf.ln(10)
     
@@ -308,9 +298,6 @@ if not st.session_state.aplicando and not df_final.empty:
     if st.button("Limpiar registros y empezar nueva"):
         borrar_registros()
         st.rerun()
-
-
-
 
 
 
