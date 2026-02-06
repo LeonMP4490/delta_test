@@ -20,22 +20,13 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS MEJORADO PARA MÓVILES ---
+# --- CSS MEJORADO ---
 st.markdown(f"""
     <style>
     .main {{ background-color: #ffffff; }}
     .block-container {{ padding-top: 1rem; padding-bottom: 0rem; }}
-    
-    [data-testid="stImage"] {{ 
-        display: flex; 
-        justify-content: center; 
-        margin-top: 10px;
-        margin-bottom: 5px;
-    }}
-    [data-testid="stImage"] img {{
-        max-height: 80px;
-        width: auto;
-    }}
+    [data-testid="stImage"] {{ display: flex; justify-content: center; margin-top: 10px; margin-bottom: 5px; }}
+    [data-testid="stImage"] img {{ max-height: 80px; width: auto; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -47,11 +38,12 @@ ID_TEMP, ID_HUM, ID_VIENTO, ID_DIR = "19951", "19937", "19954", "19933"
 SHEET_ID = "1r0sqF8qNFBgVesDY_cqKKL71hQzmBXnGsQZVlszl0hk"
 URL_SHEET = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv"
 
-# --- 3. GESTIÓN DE SESIÓN (ESTADOS) ---
+# --- 3. GESTIÓN DE SESIÓN ROBUSTA ---
+# Usamos el tiempo de la API de OMIXOM para decidir cuándo registrar
 if 'aplicando' not in st.session_state: st.session_state.aplicando = False
 if 'datos_registro' not in st.session_state: st.session_state.datos_registro = []
 if 'inicio_app' not in st.session_state: st.session_state.inicio_app = None
-if 'ultimo_registro' not in st.session_state: st.session_state.ultimo_registro = None
+if 'ultima_hora_registro' not in st.session_state: st.session_state.ultima_hora_registro = None
 
 # --- FUNCIONES ---
 def grados_a_direccion(grados):
@@ -67,11 +59,11 @@ def calcular_ie(T, hr):
           0.00391838 * (hr**1.5) * np.arctan(0.023101 * hr) - 4.686035)
     return round(T - tw, 2)
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60) # Refrescar datos más rápido para mayor precisión
 def cargar_datos():
     h = {"Authorization": TOKEN_OMI, "Content-Type": "application/json"}
     p = {"stations": {SERIE_OMI: {"modules": []}}}
-    v_act, ie_act, dir_txt, hora_estacion = 0.0, 0.0, "N/A", "--:--"
+    v_act, ie_act, dir_txt, hora_estacion, dt_estacion = 0.0, 0.0, "N/A", "--:--", None
     try:
         res = requests.post(URL_OMI, json=p, headers=h, timeout=10)
         if res.status_code == 200:
@@ -84,33 +76,29 @@ def cargar_datos():
             fecha_raw = data.get("date", "")
             if "T" in fecha_raw: 
                 fecha_dt = datetime.strptime(fecha_raw, '%Y-%m-%dT%H:%M:%S.%fZ')
-                fecha_local = fecha_dt - timedelta(hours=3)
-                hora_estacion = fecha_local.strftime('%H:%M')
-            else:
-                hora_estacion = (datetime.now() - timedelta(hours=3)).strftime('%H:%M')
+                dt_estacion = fecha_dt - timedelta(hours=3) # Hora local
+                hora_estacion = dt_estacion.strftime('%H:%M')
     except: 
         hora_estacion = (datetime.now() - timedelta(hours=3)).strftime('%H:%M')
+        dt_estacion = datetime.now() - timedelta(hours=3)
 
     try:
         df_h = pd.read_csv(URL_SHEET, skiprows=5)
         df_h.columns = ['Fecha', 'Temperatura', 'Humedad', 'Viento'] + list(df_h.columns[4:])
         df_h['Fecha'] = pd.to_datetime(df_h['Fecha'], dayfirst=True, errors='coerce')
         df_h = df_h.dropna(subset=['Fecha']).sort_values('Fecha')
-        
-        # --- FILTRO 48 HS ---
         referencia = datetime.now()
         df_h = df_h[df_h['Fecha'] >= (referencia - timedelta(hours=48))]
-        
         df_h['IE'] = df_h.apply(lambda x: calcular_ie(x['Temperatura'], x['Humedad']), axis=1)
     except: df_h = pd.DataFrame()
-    return v_act, ie_act, dir_txt, hora_estacion, df_h
+    
+    return v_act, ie_act, dir_txt, hora_estacion, dt_estacion, df_h
 
 # --- CARGA DE DATOS ---
-v_act, ie_act, dir_txt, hora_estacion, df_h = cargar_datos()
+v_act, ie_act, dir_txt, hora_estacion, dt_estacion, df_h = cargar_datos()
 
 # --- 4. INTERFAZ VISUAL ---
 st.image(URL_ICONO)
-
 st.markdown(f"<h3 style='text-align: center; color: #1A237E; margin-bottom: 0px;'>Monitor Bouquet</h3>", unsafe_allow_html=True)
 st.markdown(f"<p style='text-align: center; color: #555; font-weight: bold; margin-top: 0px;'>Ing. Agr. León - MP 4490</p>", unsafe_allow_html=True)
 
@@ -148,35 +136,32 @@ with col_izq:
                 {'range': [8, 9.5], 'color': "#FFF9C4"},
                 {'range': [9.5, 15], 'color': "#D32F2F"}
             ],
-            'threshold': {
-                'line': {'color': "black", 'width': 6}, 
-                'thickness': 0.8,
-                'value': ie_act
-            }
+            'threshold': {'line': {'color': "black", 'width': 6}, 'thickness': 0.8, 'value': ie_act}
         }))
-    
     fig_gauge.update_layout(height=250, margin=dict(l=20, r=20, t=30, b=10))
     st.plotly_chart(fig_gauge, use_container_width=True)
 
-    # --- BOTONES DE CONTROL ---
+    # --- BOTONES DE CONTROL CON REGISTRO ROBUSTO ---
     st.markdown("---")
     if not st.session_state.aplicando:
         if st.button("🔴 Iniciar Aplicación", use_container_width=True):
             st.session_state.aplicando = True
             st.session_state.datos_registro = [] 
-            st.session_state.inicio_app = datetime.now() - timedelta(hours=3)
-            st.session_state.ultimo_registro = datetime.now() - timedelta(minutes=11)
+            st.session_state.inicio_app = dt_estacion
+            st.session_state.ultima_hora_registro = dt_estacion - timedelta(minutes=11)
             st.rerun()
     else:
-        st.warning(f"⚠️ Aplicación en curso... Iniciada: {st.session_state.inicio_app.strftime('%H:%M:%S')}")
-        ahora = datetime.now()
-        if (ahora - st.session_state.ultimo_registro) > timedelta(minutes=10):
+        st.warning(f"⚠️ Aplicación activa.\nIniciada: {st.session_state.inicio_app.strftime('%H:%M:%S')}")
+        
+        # --- LÓGICA DE REGISTRO ROBUSTA ---
+        # Registra basado en la hora de la estación, no en el tiempo real del celular
+        if (dt_estacion - st.session_state.ultima_hora_registro) >= timedelta(minutes=10):
             st.session_state.datos_registro.append({
-                'Hora': (ahora - timedelta(hours=3)).strftime('%H:%M:%S'),
+                'Hora': dt_estacion.strftime('%H:%M:%S'),
                 'DT': ie_act, 'Viento': v_act, 'Direccion': dir_txt
             })
-            st.session_state.ultimo_registro = ahora
-            st.toast(f"Registro guardado: {ie_act}°C, {v_act} km/h")
+            st.session_state.ultima_hora_registro = dt_estacion
+            st.toast(f"Registro automático: {dt_estacion.strftime('%H:%M')}")
         
         if st.button("🏁 Finalizar Aplicación", use_container_width=True):
             st.session_state.aplicando = False
@@ -184,7 +169,7 @@ with col_izq:
 
 with col_der:
     # --- GRÁFICO HISTÓRICO MATPLOTLIB (Alta resolución forzada) ---
-    fig, ax = plt.subplots(figsize=(10, 7)) # Proporción adecuada
+    fig, ax = plt.subplots(figsize=(10, 7))
     cmap_om = LinearSegmentedColormap.from_list("om", ["#F1F8E9", "#2E7D32", "#FFF9C4", "#D32F2F", "#B39DDB"])
     if not df_h.empty:
         xn = mdates.date2num(df_h['Fecha'])
@@ -204,23 +189,16 @@ with col_der:
         ax.pcolormesh(X, Y, gaussian_filter(Z, sigma=(1, 4)), cmap=cmap_om, shading='gouraud', alpha=0.6)
         ax.plot(df_h['Fecha'], df_h['IE'], color='black', lw=2, marker='o', markersize=3)
         ax.set_ylim(0, 13)
-        
-        # --- EJE X ---
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%d/%m\n%H:%M'))
         ax.xaxis.set_major_locator(mdates.HourLocator(interval=6))
-        
         ax.tick_params(axis='both', labelsize=10) 
         ax.set_ylabel("Delta T (°C)", fontsize=12, fontweight='bold')
         ax.grid(True, alpha=0.3)
-        
-        # --- MÁRGENES ESTRECHOS ---
         plt.subplots_adjust(left=0.08, right=0.98, top=0.95, bottom=0.15)
-        
-    # USAR DPI ALTO PARA NITIDEZ
     st.pyplot(fig, use_container_width=True, dpi=300)
 
 st.markdown("<p style='font-size: 11px; text-align: center; font-weight: bold;'>⬜ Rocío | 🟩 Óptimo | 🟨 Precaución | 🟥 Alta Evap | 🟪Viento Prohibido</p>", unsafe_allow_html=True)
-st.caption(f"Estación Cooperativa de Bouquet | {(datetime.now() - timedelta(hours=3)).strftime('%d/%m %H:%M')}")
+st.caption(f"Estación Cooperativa de Bouquet | {datetime.now().strftime('%d/%m %H:%M')}")
 
 # --- 5. GENERACIÓN DE PDF Y RESUMEN ---
 st.markdown("---")
@@ -238,13 +216,14 @@ if not st.session_state.aplicando and st.session_state.inicio_app:
         col_res1, col_res2, col_res3 = st.columns(3)
         col_res1.metric("Delta T Promedio", f"{mean_dt:.1f} °C"); col_res2.metric("Delta T Min/Max", f"{min_dt:.1f} / {max_dt:.1f} °C"); col_res3.metric("Viento Promedio", f"{mean_viento:.1f} km/h")
         st.write(f"**Dirección Viento Predominante:** {dir_predominante}")
-        pdf = FPDF(); pdf.add_page(); pdf.set_font("Arial", size=12); pdf.set_font("Arial", 'B', 16); pdf.cell(200, 10, txt="Informe de Aplicación - Monitor Leon", ln=1, align='C'); pdf.ln(10); pdf.set_font("Arial", size=12); pdf.cell(200, 10, txt=f"Ingeniero: León - MP 4490", ln=1); pdf.cell(200, 10, txt=f"Inicio: {st.session_state.inicio_app.strftime('%d/%m/%Y %H:%M')}", ln=1); pdf.cell(200, 10, txt=f"Fin: {(datetime.now() - timedelta(hours=3)).strftime('%d/%m/%Y %H:%M')}", ln=1); pdf.ln(5); pdf.set_font("Arial", 'B', 12); pdf.cell(200, 10, txt="Resumen Estadístico:", ln=1); pdf.set_font("Arial", size=12); pdf.cell(200, 10, txt=f"- Delta T: Prom {mean_dt:.1f}°C (Min {min_dt:.1f}°C - Max {max_dt:.1f}°C)", ln=1); pdf.cell(200, 10, txt=f"- Viento: Prom {mean_viento:.1f} km/h - Predom: {dir_predominante}", ln=1); pdf.ln(10); pdf.set_font("Arial", 'B', 10); pdf.cell(40, 10, "Hora", 1); pdf.cell(40, 10, "Delta T (°C)", 1); pdf.cell(40, 10, "Viento (km/h)", 1); pdf.cell(40, 10, "Direccion", 1); pdf.ln(); pdf.set_font("Arial", size=10)
+        pdf = FPDF(); pdf.add_page(); pdf.set_font("Arial", size=12); pdf.set_font("Arial", 'B', 16); pdf.cell(200, 10, txt="Informe de Aplicación - Monitor Leon", ln=1, align='C'); pdf.ln(10); pdf.set_font("Arial", size=12); pdf.cell(200, 10, txt=f"Ingeniero: León - MP 4490", ln=1); pdf.cell(200, 10, txt=f"Inicio: {st.session_state.inicio_app.strftime('%d/%m/%Y %H:%M')}", ln=1); pdf.cell(200, 10, txt=f"Fin: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=1); pdf.ln(5); pdf.set_font("Arial", 'B', 12); pdf.cell(200, 10, txt="Resumen Estadístico:", ln=1); pdf.set_font("Arial", size=12); pdf.cell(200, 10, txt=f"- Delta T: Prom {mean_dt:.1f}°C (Min {min_dt:.1f}°C - Max {max_dt:.1f}°C)", ln=1); pdf.cell(200, 10, txt=f"- Viento: Prom {mean_viento:.1f} km/h - Predom: {dir_predominante}", ln=1); pdf.ln(10); pdf.set_font("Arial", 'B', 10); pdf.cell(40, 10, "Hora", 1); pdf.cell(40, 10, "Delta T (°C)", 1); pdf.cell(40, 10, "Viento (km/h)", 1); pdf.cell(40, 10, "Direccion", 1); pdf.ln(); pdf.set_font("Arial", size=10)
         for _, row in df.iterrows(): pdf.cell(40, 10, row['Hora'], 1); pdf.cell(40, 10, str(row['DT']), 1); pdf.cell(40, 10, str(row['Viento']), 1); pdf.cell(40, 10, row['Direccion'], 1); pdf.ln()
         nombre_archivo = f"Informe_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"; pdf.output(nombre_archivo)
         with open(nombre_archivo, "rb") as f: st.download_button("📥 Descargar Informe PDF", f, file_name=nombre_archivo)
-    else: st.warning("No se registraron datos suficientes (la aplicación fue muy corta).")
+    else: st.warning("No se registraron datos suficientes.")
     if st.button("Nueva Aplicación"):
         st.session_state.inicio_app = None; st.session_state.datos_registro = []; st.rerun()
+
 
 
 
