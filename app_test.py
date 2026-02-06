@@ -19,13 +19,14 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CSS MEJORADO ---
+# --- CSS MEJORADO (Estilo y fondo) ---
 st.markdown(f"""
     <style>
-    .main {{ background-color: #ffffff; }}
+    .main {{ background-color: #f0f2f6; }}
     .block-container {{ padding-top: 1rem; padding-bottom: 0rem; }}
     [data-testid="stImage"] {{ display: flex; justify-content: center; margin-top: 10px; margin-bottom: 5px; }}
     [data-testid="stImage"] img {{ max-height: 80px; width: auto; }}
+    .stButton>button {{ width: 100%; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -64,8 +65,11 @@ def actualizar_historico_json():
             data = res.json()[0]
             t, hum = data.get(ID_TEMP, 0), data.get(ID_HUM, 0)
             
+            # --- AJUSTE DE HORA (UTC a Argentina -3hs) ---
+            fecha_local = datetime.now() - timedelta(hours=3)
+            
             nuevo_dato = {
-                "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "fecha": fecha_local.strftime("%Y-%m-%d %H:%M:%S"),
                 "temp": t,
                 "hum": hum,
                 "viento": data.get(ID_VIENTO, 0),
@@ -81,21 +85,20 @@ def actualizar_historico_json():
                 historico = []
             
             historico.append(nuevo_dato)
-            historico = historico[-216:] # Últimas 36hs (216 intervalos de 10 min)
+            historico = historico[-216:] # Últimas 36hs
             
             with open(JSON_HISTORICO, "w") as f:
                 json.dump(historico, f)
             
             return historico
     except Exception as e:
-        # En caso de error API, cargar lo que haya en disco
         if os.path.exists(JSON_HISTORICO):
             with open(JSON_HISTORICO, "r") as f:
                 return json.load(f)
         return []
 
 # --- CACHEO DE DATOS ---
-@st.cache_resource(ttl=600) # Se ejecuta cada 10 min
+@st.cache_resource(ttl=600)
 def obtener_datos_cache():
     return actualizar_historico_json()
 
@@ -117,7 +120,7 @@ datos_actuales = historico_datos[-1] if historico_datos else None
 
 col_izq, col_der = st.columns([1, 2.2])
 
-# Inicializar estados de sesión para el control automático
+# Inicializar estados de sesión
 if 'aplicando' not in st.session_state: st.session_state.aplicando = False
 if 'hora_inicio' not in st.session_state: st.session_state.hora_inicio = None
 if 'hora_fin' not in st.session_state: st.session_state.hora_fin = None
@@ -139,7 +142,7 @@ with col_izq:
         st.markdown(f"""<div style="background-color:{color}; padding:10px; border-radius:10px; text-align:center; color:black; border: 2px solid #333;">
                     <h3 style="margin:0; font-size:18px;">{rec}</h3>
                     <p style="margin:5px 0; font-size:14px;">Viento: <b>{v_act:.1f} km/h ({dir_txt})</b><br>Delta T: <b>{ie_act:.1f}°C</b></p>
-                    <p style="margin:0; font-size:12px; font-weight:bold;">Actualizado: {hora_act} hs</p>
+                    <p style="margin:0; font-size:12px; font-weight:bold;">Actualizado: {hora_act} hs (Local)</p>
                     </div>""", unsafe_allow_html=True)
 
         # --- VELOCÍMETRO PLOTLY ---
@@ -170,30 +173,44 @@ with col_izq:
     if not st.session_state.aplicando:
         if st.button("🔴 Iniciar Aplicación", use_container_width=True):
             st.session_state.aplicando = True
-            st.session_state.hora_inicio = datetime.now()
+            st.session_state.hora_inicio = datetime.now() - timedelta(hours=3)
             st.rerun()
     else:
         st.info(f"⚡ Aplicación activa.\nInicio: **{st.session_state.hora_inicio.strftime('%H:%M:%S')}**")
         
         if st.button("🏁 Finalizar y Generar Informe", use_container_width=True):
             st.session_state.aplicando = False
-            st.session_state.hora_fin = datetime.now()
+            st.session_state.hora_fin = datetime.now() - timedelta(hours=3)
             st.rerun()
 
 with col_der:
     # --- GRÁFICO HISTÓRICO (BASADO EN JSON 36HS) ---
-    st.markdown("### Tendencia 36hs (JSON Local)")
+    st.markdown("### Tendencia 36hs (JSON Local - Hora Arg)")
     if historico_datos:
         df_plot = pd.DataFrame(historico_datos)
         df_plot['fecha'] = pd.to_datetime(df_plot['fecha'])
         
+        # --- CONFIGURACIÓN ESTILO GRÁFICO ---
         fig, ax = plt.subplots(figsize=(10, 4))
-        ax.plot(df_plot['fecha'], df_plot['dt'], color='blue', label='Delta T', marker='.', markersize=2)
-        ax.plot(df_plot['fecha'], df_plot['viento'], color='red', label='Viento', marker='.', markersize=2)
-        ax.legend()
-        ax.grid(True)
+        fig.patch.set_facecolor('#f0f2f6') # Fondo exterior
+        ax.set_facecolor('#ffffff') # Fondo interior gráfico
+        
+        # --- COLORES DE FONDO SEGÚN RIESGO (Delta T) ---
+        ax.axhspan(0, 2, facecolor='#F1F8E9', alpha=0.5)    # Rocío
+        ax.axhspan(2, 8, facecolor='#E8F5E9', alpha=0.5)    # Óptimo
+        ax.axhspan(8, 9.5, facecolor='#FFF9C4', alpha=0.5)  # Precaución
+        ax.axhspan(9.5, 20, facecolor='#FFCDD2', alpha=0.5) # Peligro
+        
+        ax.plot(df_plot['fecha'], df_plot['dt'], color='blue', label='Delta T', linewidth=1.5)
+        ax.plot(df_plot['fecha'], df_plot['viento'], color='red', label='Viento', linewidth=1.5)
+        
+        ax.set_ylim(0, 15) # Límite lógico para Delta T
+        ax.legend(loc='upper left')
+        ax.grid(True, linestyle='--', alpha=0.7)
+        
         # Formatear eje X
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%d/%m\n%H:%M'))
+        
         st.pyplot(fig)
     else:
         st.warning("Esperando datos...")
@@ -235,8 +252,8 @@ if not st.session_state.aplicando and st.session_state.hora_fin is not None:
         pdf.cell(200, 10, txt="Informe de Aplicación", ln=1, align='C'); pdf.ln(10)
         pdf.set_font("Arial", size=12)
         pdf.cell(200, 10, txt=f"Ingeniero: León - MP 4490", ln=1)
-        pdf.cell(200, 10, txt=f"Inicio: {st.session_state.hora_inicio.strftime('%d/%m/%Y %H:%M')}", ln=1)
-        pdf.cell(200, 10, txt=f"Fin: {st.session_state.hora_fin.strftime('%d/%m/%Y %H:%M')}", ln=1); pdf.ln(5)
+        pdf.cell(200, 10, txt=f"Inicio (Local): {st.session_state.hora_inicio.strftime('%d/%m/%Y %H:%M')}", ln=1)
+        pdf.cell(200, 10, txt=f"Fin (Local): {st.session_state.hora_fin.strftime('%d/%m/%Y %H:%M')}", ln=1); pdf.ln(5)
         
         pdf.set_font("Arial", 'B', 12); pdf.cell(200, 10, txt="Resumen:", ln=1)
         pdf.set_font("Arial", size=12)
