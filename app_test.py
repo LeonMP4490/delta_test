@@ -41,8 +41,13 @@ SHEET_ID = "1r0sqF8qNFBgVesDY_cqKKL71hQzmBXnGsQZVlszl0hk"
 URL_SHEET = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv"
 
 # --- 3. GESTIÓN DE SESIÓN Y BD SQLITE ---
+# Inicialización segura de session_state para evitar AttributeError
 if 'user_id' not in st.session_state:
-    st.session_state.user_id = str(uuid.uuid4()) # ID único por navegador
+    st.session_state.user_id = str(uuid.uuid4())
+if 'aplicando' not in st.session_state:
+    st.session_state.aplicando = False
+if 'inicio_app' not in st.session_state:
+    st.session_state.inicio_app = None
 
 DB_NAME = f"registros_{st.session_state.user_id}.db"
 
@@ -63,16 +68,23 @@ def guardar_registro(hora, dt, viento, direccion):
 
 def obtener_registros():
     conn = sqlite3.connect(DB_NAME)
-    df = pd.read_sql_query("SELECT * FROM registros", conn)
+    # Comprobar si la tabla existe antes de leer
+    c = conn.cursor()
+    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='registros'")
+    if c.fetchone():
+        df = pd.read_sql_query("SELECT * FROM registros", conn)
+    else:
+        df = pd.DataFrame(columns=['hora', 'dt', 'viento', 'direccion'])
     conn.close()
     return df
 
 def borrar_registros():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("DELETE FROM registros")
+    c.execute("DROP TABLE IF EXISTS registros")
     conn.commit()
     conn.close()
+    init_db()
 
 init_db()
 
@@ -179,7 +191,7 @@ with col_izq:
     df_temp = obtener_registros()
     registros_activos = not df_temp.empty
 
-    if not registros_activos:
+    if not st.session_state.aplicando:
         if st.button("🔴 Iniciar Aplicación", use_container_width=True):
             st.session_state.aplicando = True
             st.session_state.inicio_app = dt_estacion
@@ -189,10 +201,6 @@ with col_izq:
     else:
         st.warning(f"⚠️ Aplicación activa.\nRegistros guardados: {len(df_temp)}")
         
-        # --- LÓGICA DE REGISTRO EN BD ---
-        ultimo_registro_hora = datetime.strptime(df_temp['hora'].iloc[-1], '%H:%M:%S').time()
-        # Nota: Este checkeo es simple, la mejor forma es guardar la fecha completa en la BD
-        
         if st.button("➕ Registrar Dato Ahora", use_container_width=True):
             guardar_registro(dt_estacion.strftime('%H:%M:%S'), ie_act, v_act, dir_txt)
             st.toast("Dato registrado en BD")
@@ -200,7 +208,6 @@ with col_izq:
         
         if st.button("🏁 Finalizar y Generar Informe", use_container_width=True):
             st.session_state.aplicando = False
-            # La generación del reporte ocurre abajo
             st.rerun()
 
 with col_der:
@@ -261,8 +268,12 @@ if not st.session_state.aplicando and not df_final.empty:
     pdf.cell(200, 10, txt="Informe de Aplicación - Monitor Leon", ln=1, align='C'); pdf.ln(10)
     pdf.set_font("Arial", size=12)
     pdf.cell(200, 10, txt=f"Ingeniero: León - MP 4490", ln=1)
-    pdf.cell(200, 10, txt=f"Inicio: {st.session_state.inicio_app.strftime('%d/%m/%Y %H:%M')}", ln=1)
+    
+    # Manejo de fecha de inicio si no existe en session_state
+    inicio_str = st.session_state.inicio_app.strftime('%d/%m/%Y %H:%M') if st.session_state.inicio_app else "N/A"
+    pdf.cell(200, 10, txt=f"Inicio: {inicio_str}", ln=1)
     pdf.cell(200, 10, txt=f"Fin: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=1); pdf.ln(5)
+    
     pdf.set_font("Arial", 'B', 12); pdf.cell(200, 10, txt="Resumen Estadístico:", ln=1)
     pdf.set_font("Arial", size=12)
     pdf.cell(200, 10, txt=f"- Delta T: Prom {mean_dt:.1f}°C (Min {min_dt:.1f}°C - Max {max_dt:.1f}°C)", ln=1)
@@ -284,6 +295,7 @@ if not st.session_state.aplicando and not df_final.empty:
     if st.button("Limpiar registros y empezar nueva"):
         borrar_registros()
         st.rerun()
+
 
 
 
